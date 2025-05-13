@@ -62,7 +62,29 @@ int main(int argc, char **argv) {
 * **Location:** `strcpy(buf, input);` copies up to 1023 bytes into a 64-byte buffer without bounds checking.
 * **Impact:** Overwriting the return address of `vuln()` can lead to arbitrary code execution or crash detection by AFL.
 
-### Rationale
+### Compiling
+
+```bash
+afl-clang-fast -O3 -g -fno-omit-frame-pointer -fno-stack-protector -D_FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION vuln.c -o target
+```
+
+* ```afl-clang-fast``` – AFL++’s Clang wrapper that injects lightweight coverage instrumentation so the fuzzer can see which paths each input hits.
+
+* ```-O3``` – Highest mainstream optimization level; makes the target run faster, letting AFL spend more cycles mutating inputs.
+
+* ```-g``` – Emits debug symbols (DWARF); keeps stack traces meaningful when a crash is found.
+
+* ```-fno-omit-frame-pointer``` – Preserves the frame pointer even under heavy optimization, simplifying post‑mortem stack unwinding and profiling.
+
+* ```-fno-stack-protector``` – Turns off stack‑canary checks; removes a small runtime cost and avoids hiding the very overflows you’re fuzzing for.
+
+* ```-D_FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION``` – Defines a macro that marks this as a fuzz build, allowing dependent code to relax hardening and reminding you it’s not production‑safe.
+
+* ```vuln.c``` – The source file being compiled (the fuzzing target).
+
+* ```-o``` target_fast – Writes the resulting instrumented binary to target_fast, making it easy to distinguish from other builds.
+
+### Reasoning
 
 * Using `strcpy` on a fixed-size local array creates a deterministic crash scenario for fuzzing.
 * Reading from a file (`open`/`read`) simplifies automated input provisioning via AFL’s `@@` placeholder.
@@ -155,7 +177,7 @@ echo "\nCrash file size: $SIZE bytes"
 * Automates inspection of AFL-generated crash inputs.
 * Quickly previews content and size of the first crash file.
 
-### Rationale
+### Reasoning
 
 * AFL produces many crash artifacts in `out/default/crashes/`; manual inspection is tedious.
 * Standardizing on hexadecimal preview (hexdump) helps identify payload patterns.
