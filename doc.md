@@ -65,24 +65,35 @@ int main(int argc, char **argv) {
 ### Compiling
 
 ```bash
-afl-clang-fast -O3 -g -fno-omit-frame-pointer -fno-stack-protector -D_FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION vuln.c -o target
+afl-gcc -o target vuln.c -fno-stack-protector -no-pie -z execstack -O0
 ```
 
-* ```afl-clang-fast``` – AFL++’s Clang wrapper that injects lightweight coverage instrumentation so the fuzzer can see which paths each input hits.
+* `afl-gcc` - AFL’s wrapper around gcc that instruments your binary for fuzzing.
 
-* ```-O3``` – Highest mainstream optimization level; makes the target run faster, letting AFL spend more cycles mutating inputs.
+* `-o target` - Names the output executable “target.”
 
-* ```-g``` – Emits debug symbols (DWARF); keeps stack traces meaningful when a crash is found.
+* `vuln.c` - Your C source file containing the deliberate vulnerability.
 
-* ```-fno-omit-frame-pointer``` – Preserves the frame pointer even under heavy optimization, simplifying post‑mortem stack unwinding and profiling.
+* `-fno-stack-protector` - Disables compiler-inserted stack canaries, so buffer overflows won’t be caught and aborted early.
 
-* ```-fno-stack-protector``` – Turns off stack‑canary checks; removes a small runtime cost and avoids hiding the very overflows you’re fuzzing for.
+* `-no-pie` - Turns off Position-Independent Executable generation, giving a fixed code base address (necessary for reproducible crashes).
 
-* ```-D_FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION``` – Defines a macro that marks this as a fuzz build, allowing dependent code to relax hardening and reminding you it’s not production‑safe.
+* `-z execstack` - Marks the stack as executable, allowing shellcode execution for testing exploits.
 
-* ```vuln.c``` – The source file being compiled (the fuzzing target).
+* `-O0` - Disables optimizations so the compiler doesn’t inline or elide code you want to fuzz.
 
-* ```-o``` target_fast – Writes the resulting instrumented binary to target_fast, making it easy to distinguish from other builds.
+**If running into issues like slow exec/s or no crash detection, run the following:**
+* Enable core dumps:
+  ```bash
+  echo core | sudo tee /proc/sys/kernel/core_pattern
+  ```
+  * Ensures a “core” file is generated on crash so AFL can detect it
+* Disable ASLR:
+  ```bash
+  echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
+  ```
+  * Keeps memory layout consistent for reliable crash and performance tracking
+
 
 ### Reasoning
 
@@ -148,39 +159,18 @@ afl-fuzz -i in -o out -m none -t 1000+ -d -p fast -- ./target @@
 
 ## 4. `analyze_crash.sh`
 
-```bash
-#!/usr/bin/env bash
-
-# Simple crash analyzer script
-# Usage: ./analyze_crash.sh [crash_file]
-
-if [ $# -eq 0 ]; then
-    CRASH_FILE=$(ls -1 out/default/crashes/id* | head -n 1)
-    [ -z "$CRASH_FILE" ] && { echo "No crash files found"; exit 1; }
-else
-    CRASH_FILE="$1"
-fi
-
-echo "Analyzing crash file: $CRASH_FILE"
-echo "============"
-
-echo "Crash input content (first 100 bytes):"
-hexdump -C "$CRASH_FILE" | head -n 7
-echo "..."
-
-SIZE=$(stat --printf="%s" "$CRASH_FILE")
-echo "\nCrash file size: $SIZE bytes"
-```
 
 ### Purpose
 
-* Automates inspection of AFL-generated crash inputs.
-* Quickly previews content and size of the first crash file.
+* Selects the first (or user-specified) AFL crash input
+* Shows a hex dump of the first 100 bytes for quick payload inspection
+* Reports the total file size in bytes
 
 ### Reasoning
 
-* AFL produces many crash artifacts in `out/default/crashes/`; manual inspection is tedious.
-* Standardizing on hexadecimal preview (hexdump) helps identify payload patterns.
+* Automates repetitive `hexdump` + `stat` steps for each crash file
+* Helps spot unusual byte patterns or headers at a glance
+* Flags unusually large or small inputs for prioritized debugging
 
 ---
 
