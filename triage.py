@@ -5,8 +5,8 @@ import subprocess
 import re
 from collections import defaultdict
 
-CRASHES_DIR = os.environ.get("CRASHES_DIR", "out/crashes_min")
-TARGET_BINARY = os.environ.get("TARGET_BINARY", "./target_binary")
+CRASHES_DIR = os.environ.get("CRASHES_DIR", "out/default/crashes")
+TARGET_BINARY = os.environ.get("TARGET_BINARY", "./target")
 OUTPUT_JSON = os.environ.get("OUTPUT_JSON", "crash_triage.json")
 DEBUGGER = os.environ.get("DEBUGGER", "gdb")  
 
@@ -14,7 +14,7 @@ def run_debugger(binary, crash_file):
     """Run the binary under the debugger with the crash file as input and extract backtrace"""
     if DEBUGGER == "gdb":
         gdb_commands = [
-            f"run < {crash_file}",
+            f"run {crash_file}",
             "bt 10",  
             "quit"
         ]
@@ -49,9 +49,13 @@ def extract_crash_frame(stdout, stderr):
     
     if not frames:
         if "SIGSEGV" in stdout or "Segmentation fault" in stdout:
-            return "SIGSEGV (no frame info)"
+            addr_match = re.search(r'0x([0-9a-f]+) in (\w+)', stdout)
+            if addr_match:
+                addr, func = addr_match.groups()
+                return f"SIGSEGV at 0x{addr} in {func}"
+            return "SIGSEGV (stack corruption)"
         elif "SIGABRT" in stdout:
-            return "SIGABRT (no frame info)"
+            return "SIGABRT (abort signal)"
         return "UNKNOWN_CRASH"
     
     frame = frames[0]
@@ -95,7 +99,7 @@ def triage_crashes():
             "size": os.path.getsize(crash_path)
         })
     
-    print("\nTriage complete!")
+    print("\nTriage complete")
     
     sorted_groups = {k: v for k, v in sorted(
         crash_groups.items(), 
