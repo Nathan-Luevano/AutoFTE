@@ -1,5 +1,7 @@
 # AutoFTE - Automated Vulnerability Discovery to Exploitation Pipeline
 
+![AUTOFTE Logo](AutoFTE.jpg)
+
 **Enterprise-Grade Red Team Automation Suite**
 
 AutoFTE represents a paradigm shift in offensive security automation, transforming the traditional weeks-long vulnerability research process into a fully automated 5-minute pipeline. This system integrates advanced fuzzing, AI-powered analysis, intelligent exploit generation, and operational C2 deployment into a single, cohesive automation platform.
