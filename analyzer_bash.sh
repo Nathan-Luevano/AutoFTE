@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 TARGET_BINARY=${1:-"./target"}
 
 if [ ! -x "$TARGET_BINARY" ]; then
