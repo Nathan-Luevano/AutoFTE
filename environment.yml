@@ -1,0 +1,11 @@
+name: autofte
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - requests
+  - gdb
+  - binutils
+  - file
+  - make
+  - compilers
