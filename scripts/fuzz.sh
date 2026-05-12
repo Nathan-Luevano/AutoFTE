@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TARGET=${1:-./target}
-INPUT_DIR=${2:-in}
+TARGET=${1:-examples/vuln-demo/target}
+INPUT_DIR=${2:-examples/vuln-demo/in}
 OUTPUT_DIR=${3:-out}
 
 if ! command -v afl-fuzz >/dev/null 2>&1; then
