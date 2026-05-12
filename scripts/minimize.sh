@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TARGET_BINARY=${1:-"./target"}
+TARGET_BINARY=${1:-"examples/vuln-demo/target"}
 CRASHES_DIR=${2:-"out/default/crashes"}
 MIN_CRASHES_DIR=${3:-"out/default/crashes_min"}
 
