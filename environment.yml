@@ -9,3 +9,6 @@ dependencies:
   - file
   - make
   - compilers
+  - pip
+  - pip:
+      - -e .
