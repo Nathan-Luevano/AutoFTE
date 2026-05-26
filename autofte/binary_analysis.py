@@ -223,7 +223,10 @@ class BinaryAnalyzer:
         if not ok:
             return {"error": error}
 
-        fortified_functions = sorted(set(re.findall(r"__\w+_chk", stdout)))
+        # \b at the end matters: without it this also partial-matches
+        # __stack_chk_fail as "__stack_chk" and misreports a canary
+        # symbol as a FORTIFY_SOURCE function.
+        fortified_functions = sorted(set(re.findall(r"__\w+_chk\b", stdout)))
         return {
             "enabled": len(fortified_functions) > 0,
             "fortified_functions": fortified_functions,
