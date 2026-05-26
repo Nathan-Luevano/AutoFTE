@@ -131,15 +131,17 @@ class BinaryAnalyzer:
         if not ok:
             return {"error": error}
 
+        # readelf -l wraps each program header across two lines: the
+        # GNU_STACK line itself, then a continuation line that carries the
+        # RWE/RW permission flags. Both have to be read together.
         nx_enabled = False
         stack_info = ""
-        for line in stdout.split("\n"):
+        lines = stdout.split("\n")
+        for i, line in enumerate(lines):
             if "GNU_STACK" in line:
-                stack_info = line.strip()
-                if "RWE" in line:
-                    nx_enabled = False
-                elif "RW" in line:
-                    nx_enabled = True
+                continuation = lines[i + 1] if i + 1 < len(lines) else ""
+                stack_info = f"{line.strip()} {continuation.strip()}"
+                nx_enabled = "RWE" not in continuation
                 break
 
         return {
