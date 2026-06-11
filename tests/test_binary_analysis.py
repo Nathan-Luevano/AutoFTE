@@ -242,13 +242,11 @@ def test_analyze_symbols_finds_dangerous_functions_with_address_column(monkeypat
     assert result["total_imported_functions"] == 3
 
 
-def test_analyze_symbols_misses_dangerous_functions_on_real_nm_output(monkeypatch):
-    """Documents a real parsing bug (not fixed here, see test-suite report):
-    real `nm -D` leaves the address column blank for undefined dynamic
-    symbols, so a genuine line like "                 U strcpy@GLIBC_2.2.5"
-    only has 2 whitespace-separated tokens. `_analyze_symbols` requires
-    `len(parts) >= 3`, so on a real binary it silently finds zero
-    imported/dangerous functions even when strcpy is very much imported.
+def test_analyze_symbols_finds_dangerous_functions_on_real_nm_output(monkeypatch):
+    """Real `nm -D` leaves the address column blank for undefined dynamic
+    symbols, so a genuine line looks like "                 U strcpy@GLIBC_2.2.5"
+    (2 whitespace-separated tokens, not 3). `_analyze_symbols` has to handle
+    both shapes and strip the `@GLIBC_x.y.z` version suffix before matching.
     """
     analyzer = BinaryAnalyzer("bin")
     _install_tool_map(
@@ -256,8 +254,19 @@ def test_analyze_symbols_misses_dangerous_functions_on_real_nm_output(monkeypatc
         {"nm": R(nm_dynamic(imports=("strcpy", "gets", "printf"), with_address_column=False))},
     )
     result = analyzer._analyze_symbols()
-    assert result["dangerous_functions_found"] == []
-    assert result["total_imported_functions"] == 0
+    assert set(result["dangerous_functions_found"]) == {"strcpy", "gets"}
+    assert result["total_imported_functions"] == 3
+
+
+def test_analyze_symbols_strips_glibc_version_suffix(monkeypatch):
+    analyzer = BinaryAnalyzer("bin")
+    _install_tool_map(
+        monkeypatch,
+        {"nm": R("                 U strcpy@GLIBC_2.2.5\n                 U puts@GLIBC_2.2.5\n")},
+    )
+    result = analyzer._analyze_symbols()
+    assert result["dangerous_functions_found"] == ["strcpy"]
+    assert result["sample_imports"] == ["strcpy", "puts"]
 
 
 def test_get_dynamic_libraries(monkeypatch):
