@@ -242,11 +242,23 @@ class BinaryAnalyzer:
         imported_functions = []
         for line in stdout.split("\n"):
             parts = line.split()
-            if len(parts) >= 3 and parts[1] == "U":
-                func_name = parts[2]
-                imported_functions.append(func_name)
-                if func_name in DANGEROUS_FUNCTIONS:
-                    found_dangerous.append(func_name)
+            # nm -D leaves the address column blank for undefined dynamic
+            # symbols, so most lines are "U <name>" (2 fields), not
+            # "<addr> U <name>" (3 fields) -- only locally-defined exports
+            # carry an address.
+            if len(parts) == 2 and parts[0] == "U":
+                raw_name = parts[1]
+            elif len(parts) >= 3 and parts[1] == "U":
+                raw_name = parts[2]
+            else:
+                continue
+
+            # Versioned symbols look like "strcpy@GLIBC_2.2.5"; compare
+            # against the bare name.
+            func_name = raw_name.split("@")[0]
+            imported_functions.append(func_name)
+            if func_name in DANGEROUS_FUNCTIONS:
+                found_dangerous.append(func_name)
 
         return {
             "dangerous_functions_found": found_dangerous,
