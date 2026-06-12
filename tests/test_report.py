@@ -85,17 +85,20 @@ def test_build_report_with_llm_summary():
 
 def test_build_report_llm_header_present_when_only_bug_type_set():
     """The '## LLM notes' header must print whenever summary or bug_type
-    is present, per the spec. NOTE: current source still emits the
-    'unavailable' fallback line in this case because it only branches on
-    `summary` being falsy, not on `bug_type` too -- see bug notes in the
-    test-suite completion report. This test documents actual behavior.
+    is present, and the "unavailable" fallback line must NOT show up next
+    to a bug_type bullet just because summary itself is empty -- that
+    would read as contradictory.
     """
     llm_data = {"likely_bug_type": "heap-overflow"}
     text = build_report("./target", "vuln.c", {}, {}, llm_data)
     assert "## LLM notes" in text
     assert "- Likely bug type: heap-overflow" in text
-    # Documents current (arguably buggy) behavior: fallback text still
-    # shows up because `summary` is falsy, even though bug_type is set.
+    assert "LLM analysis was skipped or unavailable for this run." not in text
+
+
+def test_build_report_llm_fallback_only_when_both_absent():
+    text = build_report("./target", "vuln.c", {}, {}, {})
+    assert "## LLM notes" in text
     assert "LLM analysis was skipped or unavailable for this run." in text
 
 

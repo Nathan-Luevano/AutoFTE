@@ -61,12 +61,14 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data):
     summary = llm_data.get("summary")
     bug_type = llm_data.get("likely_bug_type")
 
+    lines.extend(["## LLM notes", ""])
     if summary:
-        lines.extend(["## LLM notes", "", summary, ""])
-    else:
-        lines.extend(
-            ["## LLM notes", "", "LLM analysis was skipped or unavailable for this run.", ""]
-        )
+        lines.extend([summary, ""])
+    elif not bug_type:
+        # Only claim the run has no LLM data at all when neither field
+        # showed up -- a bug_type with no summary still deserves the
+        # section header instead of a contradictory "unavailable" note.
+        lines.extend(["LLM analysis was skipped or unavailable for this run.", ""])
 
     if bug_type:
         lines.append(f"- Likely bug type: {bug_type}")
