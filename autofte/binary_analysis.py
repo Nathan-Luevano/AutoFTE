@@ -43,7 +43,8 @@ def _run_tool(args):
         return False, "", f"{args[0]} timed out after {TOOL_TIMEOUT_SECONDS}s"
 
     if result.returncode != 0:
-        return False, result.stdout, result.stderr.strip() or f"{args[0]} exited {result.returncode}"
+        error = result.stderr.strip() or f"{args[0]} exited {result.returncode}"
+        return False, result.stdout, error
 
     return True, result.stdout, ""
 
@@ -115,7 +116,7 @@ class BinaryAnalyzer:
             return {"status": "Cannot determine (non-Linux system)"}
 
         try:
-            with open(proc_path, "r", encoding="utf-8") as handle:
+            with open(proc_path, encoding="utf-8") as handle:
                 aslr_value = handle.read().strip()
         except OSError as exc:
             return {"error": str(exc)}

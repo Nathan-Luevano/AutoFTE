@@ -13,7 +13,8 @@ from pathlib import Path
 from . import config, dashboard, doctor, report
 from .binary_analysis import analyze_binary
 from .io_utils import load_json, write_json
-from .llm import LLMResponseError, OllamaClient, analyze as llm_analyze
+from .llm import LLMResponseError, OllamaClient
+from .llm import analyze as llm_analyze
 from .paths import pick_crash_dir
 from .triage import triage_crashes
 

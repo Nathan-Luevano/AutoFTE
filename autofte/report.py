@@ -39,7 +39,8 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data):
                 "## Binary protections",
                 "",
                 f"- Protection level: {mitigation_summary.get('protection_level', 'Unknown')}",
-                f"- Exploit difficulty estimate: {mitigation_summary.get('exploit_difficulty', 'Unknown')}",
+                "- Exploit difficulty estimate: "
+                f"{mitigation_summary.get('exploit_difficulty', 'Unknown')}",
             ]
         )
 
