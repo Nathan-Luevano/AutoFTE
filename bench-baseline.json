@@ -1,0 +1,42 @@
+{
+  "corpus_kind": "micro",
+  "corpus_path": "micro",
+  "metrics": {
+    "bucket_sizes": {
+      "hash:0ea6edf9d5513b57": 3,
+      "hash:2d3bc4dac83e2a1d": 4
+    },
+    "f_measure": 0.7272727272727273,
+    "inverse_purity": 0.5714285714285714,
+    "label_sizes": {
+      "stack-buffer-overflow-vuln": 7
+    },
+    "n_buckets": 2,
+    "n_items": 7,
+    "n_labels": 1,
+    "overcounting_by_label": {
+      "stack-buffer-overflow-vuln": 1
+    },
+    "overcounting_mean": 1.0,
+    "overcounting_std": 0.0,
+    "per_label": {
+      "stack-buffer-overflow-vuln": {
+        "best_f": 0.7272727272727273,
+        "best_recall": 0.5714285714285714,
+        "n_buckets": 2,
+        "overcounting": 1,
+        "size": 7,
+        "undercounting": 0
+      }
+    },
+    "purity": 1.0,
+    "undercounting_by_label": {
+      "stack-buffer-overflow-vuln": 0
+    },
+    "undercounting_mean": 0.0,
+    "undercounting_std": 0.0
+  },
+  "n_reports": 7,
+  "nohash_count": 0,
+  "parse_failures": 0
+}
