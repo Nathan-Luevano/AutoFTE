@@ -1,7 +1,7 @@
 # AutoFTE
 
 <p align="center">
-  <img src="AutoFTE.jpg" alt="AutoFTE logo" width="220">
+  <img src="AutoFTE.png" alt="AutoFTE logo" width="220">
 </p>
 
 <p align="center">
