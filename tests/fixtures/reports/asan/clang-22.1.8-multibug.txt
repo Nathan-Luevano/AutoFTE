@@ -1,0 +1,50 @@
+=================================================================
+==141908==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x705642ed0060 at pc 0x57dcd0e2c9fa bp 0x7ffd86859350 sp 0x7ffd86858b10
+WRITE of size 201 at 0x705642ed0060 thread T0
+    #0 0x57dcd0e2c9f9 in strcpy.part.0 /usr/local/src/conda/compiler-rt-packages-22.1.8/compiler-rt/lib/asan/asan_interceptors.cpp:582:5
+    #1 0x57dcd0eeb166 in vuln_stack_overflow /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:39:3
+    #2 0x57dcd0eeafbf in main /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:142:7
+    #3 0x745644e29d8f  (/lib/x86_64-linux-gnu/libc.so.6+0x29d8f) (BuildId: 22ca0a83a4004122e30a69b597be96e134068616)
+    #4 0x745644e29e3f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29e3f) (BuildId: 22ca0a83a4004122e30a69b597be96e134068616)
+    #5 0x57dcd0d9f104 in _start (/tmp/claude-1000/-home-natedawg-repos-AutoFTE/227c962e-c97b-40c2-b5bf-6b5bd47687da/scratchpad/target_asan_clang_mb+0x2c104)
+
+Address 0x705642ed0060 is located in stack of thread T0 at offset 96 in frame
+    #0 0x57dcd0eeb09f in vuln_stack_overflow /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:37
+
+  This frame has 1 object(s):
+    [32, 96) 'buf' (line 38) <== Memory access at offset 96 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:39:3 in vuln_stack_overflow
+Shadow bytes around the buggy address:
+  0x705642ecfd80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ecfe00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ecfe80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ecff00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ecff80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x705642ed0000: f1 f1 f1 f1 00 00 00 00 00 00 00 00[f3]f3 f3 f3
+  0x705642ed0080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ed0100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ed0180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ed0200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x705642ed0280: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==141908==ABORTING

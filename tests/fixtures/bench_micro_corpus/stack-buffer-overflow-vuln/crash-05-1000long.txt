@@ -1,0 +1,25 @@
+=================================================================
+==454799==ERROR: AddressSanitizer: strcpy-param-overlap: memory ranges [0x7ffd2be7ae50,0x7ffd2be7b239) and [0x7ffd2be7af40, 0x7ffd2be7b329) overlap
+    #0 0x71f5efa543e6 in __interceptor_strcpy ../../../../src/libsanitizer/asan/asan_interceptors.cpp:438
+    #1 0x5c04fb3823f3 in vuln /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:8
+    #2 0x5c04fb38269b in main /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:35
+    #3 0x71f5ef629d8f  (/lib/x86_64-linux-gnu/libc.so.6+0x29d8f)
+    #4 0x71f5ef629e3f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29e3f)
+    #5 0x5c04fb382284 in _start (/home/natedawg/repos/AutoFTE/examples/vuln-demo/target_asan+0x1284)
+
+Address 0x7ffd2be7ae50 is located in stack of thread T0 at offset 32 in frame
+    #0 0x5c04fb382358 in vuln /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:6
+
+  This frame has 1 object(s):
+    [32, 96) 'buf' (line 7) <== Memory access at offset 32 partially overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+Address 0x7ffd2be7af40 is located in stack of thread T0 at offset 32 in frame
+    #0 0x5c04fb382477 in main /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:11
+
+  This frame has 1 object(s):
+    [32, 1056) 'buffer' (line 12) <== Memory access at offset 32 is inside this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: strcpy-param-overlap ../../../../src/libsanitizer/asan/asan_interceptors.cpp:438 in __interceptor_strcpy
+==454799==ABORTING

@@ -2,6 +2,8 @@
 
 import shutil
 import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -165,6 +167,33 @@ def compile_vuln_binary(dst_dir, src_path):
             str(target),
             str(src_path),
         ],
+        check=True,
+        capture_output=True,
+    )
+    return target
+
+
+def _detect_asan_available():
+    if not GCC_AVAILABLE:
+        return False
+    with tempfile.TemporaryDirectory(prefix="autofte-asan-probe-") as probe_dir:
+        probe_src = Path(probe_dir) / "probe.c"
+        probe_src.write_text("int main(void) { return 0; }\n")
+        result = subprocess.run(
+            ["gcc", "-fsanitize=address", "-o", str(Path(probe_dir) / "probe"), str(probe_src)],
+            capture_output=True,
+        )
+        return result.returncode == 0
+
+
+ASAN_AVAILABLE = _detect_asan_available()
+
+
+def compile_vuln_asan_binary(dst_dir, src_path):
+    """Compile examples/vuln-demo/vuln.c with -fsanitize=address."""
+    target = dst_dir / "target_asan"
+    subprocess.run(
+        ["gcc", "-fsanitize=address", "-g", "-O0", "-o", str(target), str(src_path)],
         check=True,
         capture_output=True,
     )

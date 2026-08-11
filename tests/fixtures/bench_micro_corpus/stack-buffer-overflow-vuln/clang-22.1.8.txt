@@ -1,0 +1,50 @@
+=================================================================
+==449043==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x6f86510d0060 at pc 0x5a9aeac599ba bp 0x7ffc4f3bde50 sp 0x7ffc4f3bd610
+WRITE of size 201 at 0x6f86510d0060 thread T0
+    #0 0x5a9aeac599b9 in strcpy.part.0 /usr/local/src/conda/compiler-rt-packages-22.1.8/compiler-rt/lib/asan/asan_interceptors.cpp:582:5
+    #1 0x5a9aead17d96 in vuln /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:8:3
+    #2 0x5a9aead1804f in main /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:35:3
+    #3 0x738653029d8f  (/lib/x86_64-linux-gnu/libc.so.6+0x29d8f) (BuildId: 22ca0a83a4004122e30a69b597be96e134068616)
+    #4 0x738653029e3f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29e3f) (BuildId: 22ca0a83a4004122e30a69b597be96e134068616)
+    #5 0x5a9aeabcc0c4 in _start (/tmp/claude-1000/-home-natedawg-repos-AutoFTE/227c962e-c97b-40c2-b5bf-6b5bd47687da/scratchpad/target_asan_clang22+0x2c0c4)
+
+Address 0x6f86510d0060 is located in stack of thread T0 at offset 96 in frame
+    #0 0x5a9aead17ccf in vuln /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:6
+
+  This frame has 1 object(s):
+    [32, 96) 'buf' (line 7) <== Memory access at offset 96 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/natedawg/repos/AutoFTE/examples/vuln-demo/vuln.c:8:3 in vuln
+Shadow bytes around the buggy address:
+  0x6f86510cfd80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510cfe00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510cfe80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510cff00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510cff80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x6f86510d0000: f1 f1 f1 f1 00 00 00 00 00 00 00 00[f3]f3 f3 f3
+  0x6f86510d0080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510d0100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510d0180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510d0200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x6f86510d0280: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==449043==ABORTING
