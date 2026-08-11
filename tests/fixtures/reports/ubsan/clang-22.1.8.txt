@@ -1,0 +1,2 @@
+/tmp/autofte-fixture/ubsan_demo.c:5:16: runtime error: signed integer overflow: 2147483647 + 1 cannot be represented in type 'int'
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /tmp/autofte-fixture/ubsan_demo.c:5:16 

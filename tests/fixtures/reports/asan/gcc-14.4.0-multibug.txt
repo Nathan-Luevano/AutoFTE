@@ -1,0 +1,50 @@
+=================================================================
+==137455==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x71e166100060 at pc 0x71e1686a47c1 bp 0x7ffe1a84e7d0 sp 0x7ffe1a84df90
+WRITE of size 201 at 0x71e166100060 thread T0
+    #0 0x71e1686a47c0 in strcpy ../../../../libsanitizer/asan/asan_interceptors.cpp:563
+    #1 0x65552afd8330 in vuln_stack_overflow examples/vuln-demo/vuln.c:39
+    #2 0x65552afd87e3 in main examples/vuln-demo/vuln.c:142
+    #3 0x71e168229d8f  (/lib/x86_64-linux-gnu/libc.so.6+0x29d8f) (BuildId: 22ca0a83a4004122e30a69b597be96e134068616)
+    #4 0x71e168229e3f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29e3f) (BuildId: 22ca0a83a4004122e30a69b597be96e134068616)
+    #5 0x65552afd81d4 in _start (/tmp/autofte-fixture/target_asan_gcc14+0x11d4)
+
+Address 0x71e166100060 is located in stack of thread T0 at offset 96 in frame
+    #0 0x65552afd82a8 in vuln_stack_overflow examples/vuln-demo/vuln.c:37
+
+  This frame has 1 object(s):
+    [32, 96) 'buf' (line 38) <== Memory access at offset 96 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow ../../../../libsanitizer/asan/asan_interceptors.cpp:563 in strcpy
+Shadow bytes around the buggy address:
+  0x71e1660ffd80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e1660ffe00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e1660ffe80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e1660fff00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e1660fff80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x71e166100000: f1 f1 f1 f1 00 00 00 00 00 00 00 00[f3]f3 f3 f3
+  0x71e166100080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e166100100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e166100180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e166100200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x71e166100280: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==137455==ABORTING
