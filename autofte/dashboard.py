@@ -1,6 +1,21 @@
-"""Static HTML dashboard built from triage / binary / LLM artifacts."""
+"""Static HTML dashboard built from triage / binary / LLM artifacts.
+
+Per ROADMAP 2.5 / PLAN.md's JTBD #1 ("1,166 crashes -> 3 real bugs, ranked
+and explained"), the crash-groups table is the scannable ranked list: each
+row now shows the group's bug class (when a sanitizer record is attached to
+one of its crashes) alongside the raw signature, its crash count, and the
+crash-aware difficulty from `severity.py` with its confidence -- the
+rationale is tucked into a native `<details>` disclosure (no JS needed) so
+the table stays scannable while the reasoning is one click away. Severity is
+recomputed here directly from `triage`/`binary_data`, the same way
+`report.py` does it, rather than threaded through a new artifact.
+"""
 
 import html
+
+from . import severity
+
+MAX_GROUPS_SHOWN = 8
 
 
 def _render_list(items):
@@ -10,19 +25,69 @@ def _render_list(items):
     return f"<ul>{rows}</ul>"
 
 
+def _representative_crash_record(group_data):
+    for crash in group_data.get("crashes", []):
+        record = crash.get("sanitizer")
+        if record:
+            return record
+    return None
+
+
+def _bug_class_label(crash_record):
+    if not crash_record:
+        return None
+    bug_class = crash_record.get("bug_class") or "unknown"
+    details = []
+    access_type = crash_record.get("access_type")
+    access_size = crash_record.get("access_size")
+    if access_type:
+        details.append(access_type)
+    if access_size is not None:
+        details.append(f"{access_size} bytes")
+    if details:
+        return f"{bug_class} ({', '.join(details)})"
+    return bug_class
+
+
+def _group_row(frame, data, binary_data):
+    sample = data.get("crashes", [{}])[0]
+    crash_record = _representative_crash_record(data)
+    bug_class_label = _bug_class_label(crash_record)
+
+    if bug_class_label and bug_class_label != frame:
+        signature_html = (
+            f"<strong>{html.escape(bug_class_label)}</strong>"
+            f"<br><span class=\"muted\">{html.escape(frame)}</span>"
+        )
+    else:
+        signature_html = f"<strong>{html.escape(frame)}</strong>"
+
+    assessment = severity.assess_crash_difficulty(binary_data, crash_record)
+    confidence_pct = round(assessment["confidence"] * 100)
+    difficulty_html = (
+        f"{html.escape(assessment['difficulty'])} "
+        f"<span class=\"muted\">({confidence_pct}% confidence)</span>"
+        "<details><summary>why</summary>"
+        f"<p>{html.escape(assessment['rationale'])}</p>"
+        "</details>"
+    )
+
+    return (
+        "<tr>"
+        f"<td>{signature_html}</td>"
+        f"<td>{data.get('count', 0)}</td>"
+        f"<td>{difficulty_html}</td>"
+        f"<td>{html.escape(str(sample.get('file', 'n/a')))}</td>"
+        "</tr>"
+    )
+
+
 def build_html(triage, binary_data, llm_data):
     groups = triage.get("groups", {})
-    group_rows = []
-    for frame, data in list(groups.items())[:8]:
-        sample = data.get("crashes", [{}])[0]
-        group_rows.append(
-            "<tr>"
-            f"<td>{html.escape(frame)}</td>"
-            f"<td>{data.get('count', 0)}</td>"
-            f"<td>{html.escape(sample.get('file', 'n/a'))}</td>"
-            f"<td>{sample.get('size', 'n/a')}</td>"
-            "</tr>"
-        )
+    group_rows = [
+        _group_row(frame, data, binary_data)
+        for frame, data in list(groups.items())[:MAX_GROUPS_SHOWN]
+    ]
 
     def _flag(key):
         return "enabled" if binary_data.get(key, {}).get("enabled") else "disabled"
@@ -44,7 +109,18 @@ def build_html(triage, binary_data, llm_data):
 
     notes_html = _render_list(llm_data.get("next_checks", []))
     fixes_html = _render_list(llm_data.get("fix_ideas", []))
+    confirm_html = _render_list(llm_data.get("what_would_confirm", []))
     llm_summary = html.escape(llm_data.get("summary", "No LLM note for this run."))
+
+    narrative_bits = []
+    if llm_data.get("likely_bug_type"):
+        narrative_bits.append(f"Likely bug type: {llm_data['likely_bug_type']}")
+    if llm_data.get("confidence") is not None:
+        narrative_bits.append(f"Confidence: {llm_data['confidence']}")
+    if llm_data.get("root_cause"):
+        narrative_bits.append(f"Root cause: {llm_data['root_cause']}")
+    narrative_html = _render_list(narrative_bits)
+
     group_rows_html = "".join(group_rows) if group_rows else (
         '<tr><td colspan="4">No crash data found.</td></tr>'
     )
@@ -84,7 +160,7 @@ def build_html(triage, binary_data, llm_data):
     }}
     h1, h2 {{ margin: 0 0 12px; font-weight: 600; }}
     p {{ margin: 0 0 12px; line-height: 1.55; }}
-    .muted {{ color: var(--muted); }}
+    .muted {{ color: var(--muted); font-size: 0.9em; }}
     .grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -108,6 +184,13 @@ def build_html(triage, binary_data, llm_data):
     th {{ background: var(--accent-soft); font-weight: 600; }}
     ul {{ margin: 10px 0 0; padding-left: 18px; }}
     .section {{ margin-top: 20px; }}
+    details {{ margin-top: 4px; }}
+    details summary {{
+      cursor: pointer;
+      color: var(--accent);
+      font-size: 0.85em;
+    }}
+    details p {{ margin: 6px 0 0; font-size: 0.9em; color: var(--muted); }}
     @media (max-width: 640px) {{
       .wrap {{ padding: 18px 14px 40px; }}
       .hero, .card {{ padding: 18px; }}
@@ -142,10 +225,15 @@ def build_html(triage, binary_data, llm_data):
 
     <section class="section card">
       <h2>Crash groups</h2>
-      <p class="muted">Top buckets from the triage output.</p>
+      <p class="muted">
+        Ranked by crash count -- collapsed via major/minor stack-hash dedup, not raw
+        crash count. Bug class and difficulty come from the crash-aware severity
+        assessment for a representative crash in each group; click "why" for the
+        reasoning behind it.
+      </p>
       <table>
         <thead>
-          <tr><th>Signature</th><th>Count</th><th>Sample</th><th>Size</th></tr>
+          <tr><th>Bug class / signature</th><th>Count</th><th>Difficulty</th><th>Sample</th></tr>
         </thead>
         <tbody>
           {group_rows_html}
@@ -159,8 +247,11 @@ def build_html(triage, binary_data, llm_data):
         {summary_html}
       </div>
       <div class="card">
-        <h2>LLM summary</h2>
+        <h2>LLM narrative</h2>
         <p>{llm_summary}</p>
+        {narrative_html}
+        <h2 class="section">What would confirm this</h2>
+        {confirm_html}
       </div>
     </section>
 
