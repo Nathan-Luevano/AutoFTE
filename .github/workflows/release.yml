@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish-pypi:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: pip install build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  build-binary:
+    name: Build and attach single-file binary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the package and PyInstaller
+        run: |
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Build the single-file binary
+        run: pyinstaller --noconfirm pyinstaller.spec
+
+      - name: Rename binary with platform suffix
+        run: mv dist/autofte dist/autofte-linux-x86_64
+
+      - name: Attach binary to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/autofte-linux-x86_64

@@ -1,0 +1,43 @@
+name: Bench (Igor/GPTrace nightly)
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  bench-igor:
+    name: bench (full Igor/GPTrace corpus)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the package
+        run: pip install -e .
+
+      - name: Fetch the Igor/GPTrace corpus
+        run: bash scripts/fetch_bench_corpus.sh
+
+      - name: Run the full corpus and report metrics
+        shell: bash
+        run: |
+          autofte bench --corpus igor --json bench-results-igor.json | tee bench-output.txt
+          {
+            echo "### autofte bench --corpus igor"
+            echo '```'
+            cat bench-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bench results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-igor
+          path: bench-results-igor.json
