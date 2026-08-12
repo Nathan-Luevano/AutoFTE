@@ -1,32 +1,100 @@
 
+import json
+
 import pytest
 import requests
 
 from autofte.llm import (
+    RESPONSE_SCHEMA,
+    EvidenceLedger,
     LLMResponseError,
     OllamaClient,
+    _evidence_completeness,
     analyze,
     build_prompt,
     extract_json,
+    validate_response,
 )
+
+
+def _sanitizer_record():
+    return {
+        "sanitizer": "AddressSanitizer",
+        "bug_class": "heap-buffer-overflow",
+        "access_type": "write",
+        "access_size": 8,
+        "fault_addr": "0xdeadbeef",
+        "crash_stack": [
+            {"frame": 0, "addr": "0x1", "func": "vuln", "file": "vuln.c", "line": 9},
+            {"frame": 1, "addr": "0x2", "func": "main", "file": "vuln.c", "line": 20},
+        ],
+        "alloc_stack": [
+            {"frame": 0, "addr": "0x3", "func": "malloc", "file": None, "line": None},
+        ],
+        "free_stack": [],
+        "sanitizer_raw": "\n".join(f"line {i}" for i in range(40)),
+    }
+
+
+def _triage_data_with_sanitizer_record():
+    return {
+        "total_crashes": 5,
+        "unique_crash_frames": 1,
+        "triage_mode": "sanitizer",
+        "groups": {
+            "heap-buffer-overflow (write 8) in vuln at vuln.c:9": {
+                "count": 5,
+                "crashes": [
+                    {"file": "c1", "size": 42, "sanitizer": _sanitizer_record()},
+                ],
+            }
+        },
+    }
+
+
+# Evidence IDs for _triage_data_with_sanitizer_record() with no binary_analysis/
+# severity/source/disassembly, in minting order: E1 sanitizer, E2 bug_class,
+# E3 access_type/size, E4 fault_addr, E5 crash frame #0, E6 crash frame #1,
+# E7 alloc frame #0 (free_stack is empty), E8 raw sanitizer report pointer.
+FULL_RESPONSE = {
+    "reasoning": "E2 states bug_class heap-buffer-overflow; E7 shows the allocation site.",
+    "summary": "A heap buffer overflow was written past the allocation.",
+    "summary_evidence": ["E2"],
+    "likely_bug_type": "heap-buffer-overflow",
+    "likely_bug_type_evidence": ["E2"],
+    "root_cause": "An unbounded write went past the end of a heap buffer allocated in malloc.",
+    "root_cause_evidence": ["E2", "E7"],
+    "exploitability_class": "write_primitive_indicated",
+    "exploitability_evidence": ["E3"],
+    "fix_ideas": ["bounds-check the write before it happens"],
+    "next_checks": ["confirm the allocation size against the write size"],
+    "what_would_confirm": ["the exact allocation size at E7"],
+    "unknowns": ["whether the overflow size is attacker-controlled"],
+}
+
 
 # --------------------------------------------------------------------------
 # extract_json
 # --------------------------------------------------------------------------
 
 def test_extract_json_valid():
-    text = '{"summary": "hi", "confidence": 0.5}'
-    assert extract_json(text) == {"summary": "hi", "confidence": 0.5}
+    text = '{"summary": "hi", "likely_bug_type": "x"}'
+    assert extract_json(text) == {"summary": "hi", "likely_bug_type": "x"}
 
 
 def test_extract_json_embedded_in_prose():
     text = (
         "Sure, here is my answer:\n"
-        '{"summary": "buffer overflow", "confidence": 0.8}\n'
+        '{"summary": "buffer overflow"}\n'
         "Hope that helps!"
     )
     result = extract_json(text)
     assert result["summary"] == "buffer overflow"
+
+
+def test_extract_json_empty_raises():
+    with pytest.raises(LLMResponseError):
+        extract_json("")
 
 
 def test_extract_json_no_braces_raises():
@@ -45,9 +113,31 @@ def test_extract_json_only_closing_brace_raises():
 
 
 def test_extract_json_end_before_start_raises():
-    # rfind('}') before find('{') should be treated as invalid
     with pytest.raises(LLMResponseError):
         extract_json("} some text {")
+
+
+# --------------------------------------------------------------------------
+# EvidenceLedger
+# --------------------------------------------------------------------------
+
+def test_evidence_ledger_mints_sequential_ids():
+    ledger = EvidenceLedger()
+    assert ledger.add("sanitizer: AddressSanitizer") == "E1"
+    assert ledger.add("bug_class: heap-buffer-overflow") == "E2"
+
+
+def test_evidence_ledger_lines_format():
+    ledger = EvidenceLedger()
+    ledger.add("sanitizer: AddressSanitizer")
+    assert ledger.lines() == ["[E1] sanitizer: AddressSanitizer"]
+
+
+def test_evidence_ledger_ids_returns_set():
+    ledger = EvidenceLedger()
+    ledger.add("a")
+    ledger.add("b")
+    assert ledger.ids() == {"E1", "E2"}
 
 
 # --------------------------------------------------------------------------
@@ -123,6 +213,48 @@ def test_ollama_client_ask_returns_stripped_response(monkeypatch):
     assert result == "some answer"
 
 
+def test_ollama_client_ask_without_schema_omits_format(monkeypatch):
+    client = OllamaClient(model="llama3", host="http://x")
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["payload"] = json
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello")
+    assert "format" not in captured["payload"]
+    assert captured["payload"]["options"]["temperature"] == 0.1
+
+
+def test_ollama_client_ask_with_schema_defaults_temperature_zero(monkeypatch):
+    client = OllamaClient(model="llama3", host="http://x")
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["payload"] = json
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello", schema=RESPONSE_SCHEMA)
+    assert captured["payload"]["format"] == RESPONSE_SCHEMA
+    assert captured["payload"]["options"]["temperature"] == 0.0
+
+
+def test_ollama_client_ask_with_schema_honors_explicit_temperature(monkeypatch):
+    client = OllamaClient(model="llama3", host="http://x")
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["payload"] = json
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello", schema=RESPONSE_SCHEMA, temperature=0.7)
+    assert captured["payload"]["format"] == RESPONSE_SCHEMA
+    assert captured["payload"]["options"]["temperature"] == 0.7
+
+
 # --------------------------------------------------------------------------
 # build_prompt
 # --------------------------------------------------------------------------
@@ -137,6 +269,16 @@ def test_build_prompt_minimal():
     prompt = build_prompt(triage_data)
     assert "Total crashes: 0" in prompt
     assert "Top crash group" not in prompt
+
+
+def test_build_prompt_includes_guardrails():
+    prompt = build_prompt({"groups": {}})
+    assert "writing a defect report for the developer" in prompt
+    assert "Answer ONLY from the numbered evidence below" in prompt
+    assert "`insufficient_evidence` and `unknown` are correct answers" in prompt
+    assert "Never describe steps to exploit it" in prompt
+    assert "Put your reasoning in the `reasoning` field first" in prompt
+    assert "Respond with JSON only, matching the provided schema." in prompt
 
 
 def test_build_prompt_includes_top_group_and_binary_and_source():
@@ -157,9 +299,198 @@ def test_build_prompt_includes_top_group_and_binary_and_source():
     prompt = build_prompt(triage_data, source_code="int main(){}", binary_analysis=binary_analysis)
     assert "Top crash group: SIGSEGV" in prompt
     assert "Sample crash size: 42 bytes" in prompt
-    assert "protection_level: Low" in prompt
+    assert "protection_level=Low" in prompt
+    assert "NX=False" in prompt
     assert "int main(){}" in prompt
-    assert "Respond with JSON only" in prompt
+
+
+def test_build_prompt_includes_structured_crash_record_evidence():
+    prompt = build_prompt(_triage_data_with_sanitizer_record())
+    assert "[E1] sanitizer: AddressSanitizer" in prompt
+    assert "[E2] bug_class: heap-buffer-overflow" in prompt
+    assert "[E3] access_type: write, access_size: 8" in prompt
+    assert "[E4] fault_addr: 0xdeadbeef" in prompt
+    assert "[E5] crash frame #0: in vuln at vuln.c:9" in prompt
+    assert "[E6] crash frame #1: in main at vuln.c:20" in prompt
+    assert "[E7] alloc frame #0: in malloc" in prompt
+    assert "[E8] raw sanitizer report: provided verbatim below (truncated)" in prompt
+
+
+def test_build_prompt_states_ground_truth_precedence_for_bug_class():
+    prompt = build_prompt(_triage_data_with_sanitizer_record())
+    assert "Ground truth: [E2]'s bug_class comes from the sanitizer itself" in prompt
+
+
+def test_build_prompt_caps_raw_sanitizer_report():
+    prompt = build_prompt(_triage_data_with_sanitizer_record())
+    assert "line 24" in prompt
+    assert "line 25" not in prompt
+
+
+def test_build_prompt_includes_severity_assessment_evidence():
+    severity_assessment = {
+        "difficulty": "Medium",
+        "confidence": 0.62,
+        "rationale": "heap-buffer-overflow (write) -- corrupts heap metadata",
+    }
+    prompt = build_prompt(
+        _triage_data_with_sanitizer_record(), severity_assessment=severity_assessment
+    )
+    assert "severity.py: difficulty=Medium, confidence=0.62" in prompt
+    assert (
+        "severity.py rationale: heap-buffer-overflow (write) -- corrupts heap metadata" in prompt
+    )
+
+
+def test_build_prompt_omits_severity_evidence_when_not_supplied():
+    prompt = build_prompt(_triage_data_with_sanitizer_record())
+    assert "severity.py:" not in prompt
+
+
+def test_build_prompt_includes_disassembly_when_given():
+    prompt = build_prompt(
+        _triage_data_with_sanitizer_record(), disassembly="0x401196: mov eax, [rbp-0x8]"
+    )
+    assert "disassembly: provided verbatim below" in prompt
+    assert "0x401196: mov eax, [rbp-0x8]" in prompt
+
+
+def test_build_prompt_omits_disassembly_section_when_not_given():
+    prompt = build_prompt(_triage_data_with_sanitizer_record())
+    assert "disassembly: provided verbatim below" not in prompt
+
+
+def test_build_prompt_no_crash_record_when_group_has_none():
+    triage_data = {
+        "total_crashes": 3,
+        "unique_crash_frames": 1,
+        "triage_mode": "direct",
+        "groups": {"SIGSEGV": {"count": 3, "crashes": [{"file": "c1", "size": 42}]}},
+    }
+    prompt = build_prompt(triage_data)
+    assert "bug_class:" not in prompt
+    assert "Ground truth:" not in prompt
+
+
+# --------------------------------------------------------------------------
+# _evidence_completeness
+# --------------------------------------------------------------------------
+
+def test_evidence_completeness_zero_with_nothing():
+    assert _evidence_completeness(None, None, None) == 0.0
+
+
+def test_evidence_completeness_sanitizer_record_only():
+    record = {
+        "bug_class": "heap-buffer-overflow",
+        "crash_stack": [],
+        "alloc_stack": [],
+        "free_stack": [],
+    }
+    assert _evidence_completeness(record, None, None) == pytest.approx(0.35)
+
+
+def test_evidence_completeness_symbolized_frame_bonus():
+    record = {
+        "bug_class": "heap-buffer-overflow",
+        "crash_stack": [{"func": "vuln", "file": "vuln.c"}],
+        "alloc_stack": [],
+        "free_stack": [],
+    }
+    assert _evidence_completeness(record, None, None) == pytest.approx(0.55)
+
+
+def test_evidence_completeness_uaf_heap_timeline_bonus():
+    record = {
+        "bug_class": "heap-use-after-free",
+        "crash_stack": [],
+        "alloc_stack": [{"func": "malloc", "file": None}],
+        "free_stack": [],
+    }
+    assert _evidence_completeness(record, None, None) == pytest.approx(0.5)
+
+
+def test_evidence_completeness_source_and_disassembly_bonus():
+    assert _evidence_completeness(None, "int main(){}", "mov eax, ebx") == pytest.approx(0.3)
+
+
+def test_evidence_completeness_caps_at_one():
+    record = {
+        "bug_class": "heap-use-after-free",
+        "crash_stack": [{"func": "vuln", "file": "vuln.c"}],
+        "alloc_stack": [{"func": "malloc", "file": "alloc.c"}],
+        "free_stack": [{"func": "free_it", "file": "alloc.c"}],
+    }
+    assert _evidence_completeness(record, "int main(){}", "mov eax, ebx") == 1.0
+
+
+# --------------------------------------------------------------------------
+# validate_response
+# --------------------------------------------------------------------------
+
+def test_validate_response_accepts_full_response():
+    validate_response(dict(FULL_RESPONSE))
+
+
+def test_validate_response_rejects_missing_reasoning():
+    incomplete = {k: v for k, v in FULL_RESPONSE.items() if k != "reasoning"}
+    with pytest.raises(LLMResponseError, match="reasoning"):
+        validate_response(incomplete)
+
+
+def test_validate_response_rejects_missing_unknowns():
+    incomplete = {k: v for k, v in FULL_RESPONSE.items() if k != "unknowns"}
+    with pytest.raises(LLMResponseError, match="unknowns"):
+        validate_response(incomplete)
+
+
+def test_validate_response_rejects_confidence_field_not_required():
+    # confidence is computed, never asked of the model -- its presence or
+    # absence in the raw response must not affect validation either way.
+    with_confidence = dict(FULL_RESPONSE)
+    with_confidence["confidence"] = 0.9
+    validate_response(with_confidence)
+
+
+def test_validate_response_rejects_bad_exploitability_class():
+    bad = dict(FULL_RESPONSE)
+    bad["exploitability_class"] = "definitely_exploitable"
+    with pytest.raises(LLMResponseError, match="exploitability_class"):
+        validate_response(bad)
+
+
+def test_validate_response_rejects_empty_evidence_list():
+    bad = dict(FULL_RESPONSE)
+    bad["summary_evidence"] = []
+    with pytest.raises(LLMResponseError, match="summary_evidence"):
+        validate_response(bad)
+
+
+def test_validate_response_rejects_evidence_not_a_list():
+    bad = dict(FULL_RESPONSE)
+    bad["root_cause_evidence"] = "E2"
+    with pytest.raises(LLMResponseError, match="root_cause_evidence"):
+        validate_response(bad)
+
+
+def test_validate_response_rejects_capped_list_over_limit():
+    bad = dict(FULL_RESPONSE)
+    bad["fix_ideas"] = ["a", "b", "c", "d", "e"]
+    with pytest.raises(LLMResponseError, match="fix_ideas"):
+        validate_response(bad)
+
+
+def test_validate_response_rejects_placeholder_summary():
+    bad = dict(FULL_RESPONSE)
+    bad["summary"] = "short label"
+    with pytest.raises(LLMResponseError, match="summary"):
+        validate_response(bad)
+
+
+def test_validate_response_allows_unknown_likely_bug_type_as_abstention():
+    response = dict(FULL_RESPONSE)
+    response["likely_bug_type"] = "unknown"
+    validate_response(response)
 
 
 # --------------------------------------------------------------------------
@@ -171,20 +502,108 @@ class FakeClient:
 
     def __init__(self, response_text):
         self.response_text = response_text
+        self.calls = []
 
     def ask(self, prompt, **kwargs):
+        self.calls.append((prompt, kwargs))
         return self.response_text
 
 
-def test_analyze_returns_parsed_result_with_metadata():
-    client = FakeClient('{"summary": "looks like a stack overflow", "confidence": 0.9}')
-    result = analyze(client, {"groups": {}})
-    assert result["summary"] == "looks like a stack overflow"
+def test_analyze_returns_parsed_result_with_metadata_and_confidence():
+    client = FakeClient(json.dumps(FULL_RESPONSE))
+    result = analyze(client, _triage_data_with_sanitizer_record())
+    assert result["summary"] == FULL_RESPONSE["summary"]
     assert result["model_used"] == "fake-model"
     assert "timestamp" in result
+    assert 0.0 <= result["confidence"] <= 1.0
+    assert set(result["confidence_breakdown"]) == {
+        "confidence",
+        "agreement_score",
+        "validator_penalty",
+        "evidence_completeness",
+        "rejections",
+        "warnings",
+    }
 
 
-def test_analyze_raises_on_bad_model_response():
-    client = FakeClient("not json at all")
-    with pytest.raises(LLMResponseError):
-        analyze(client, {"groups": {}})
+def test_analyze_passes_schema_and_temperature_zero_to_client():
+    client = FakeClient(json.dumps(FULL_RESPONSE))
+    analyze(client, _triage_data_with_sanitizer_record())
+    _prompt, kwargs = client.calls[0]
+    assert kwargs["schema"] is RESPONSE_SCHEMA
+    assert kwargs["temperature"] == 0.0
+
+
+class SequenceClient:
+    model = "fake-model"
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def ask(self, prompt, **kwargs):
+        self.calls.append((prompt, kwargs))
+        return self.responses.pop(0)
+
+
+def test_analyze_retries_once_on_bad_json_then_succeeds():
+    client = SequenceClient(["not json at all", json.dumps(FULL_RESPONSE)])
+    result = analyze(client, _triage_data_with_sanitizer_record())
+    assert len(client.calls) == 2
+    assert "first attempt was rejected and retried" in result["confidence_breakdown"]["warnings"][0]
+    assert result["summary"] == FULL_RESPONSE["summary"]
+
+
+def test_analyze_retry_prompt_includes_validation_error():
+    client = SequenceClient(["not json at all", json.dumps(FULL_RESPONSE)])
+    analyze(client, _triage_data_with_sanitizer_record())
+    retry_prompt, _kwargs = client.calls[1]
+    assert "Your previous response was rejected" in retry_prompt
+
+
+def test_analyze_raises_after_two_failed_attempts():
+    client = SequenceClient(["not json", "still not json"])
+    with pytest.raises(LLMResponseError, match="after one retry"):
+        analyze(client, _triage_data_with_sanitizer_record())
+    assert len(client.calls) == 2
+
+
+def test_analyze_substitutes_contradicted_bug_class():
+    contradicting = dict(FULL_RESPONSE)
+    contradicting["likely_bug_type"] = "stack-buffer-overflow"
+    client = FakeClient(json.dumps(contradicting))
+    result = analyze(client, _triage_data_with_sanitizer_record())
+    assert result["likely_bug_type"] == "heap-buffer-overflow"
+    assert any("contradicts" in item for item in result["confidence_breakdown"]["rejections"])
+
+
+def test_analyze_drops_fabricated_evidence_citation():
+    fabricated = dict(FULL_RESPONSE)
+    fabricated["root_cause_evidence"] = ["E2", "E99"]
+    client = FakeClient(json.dumps(fabricated))
+    result = analyze(client, _triage_data_with_sanitizer_record())
+    assert result["root_cause_evidence"] == ["E2"]
+    rejections = result["confidence_breakdown"]["rejections"]
+    assert any("unknown evidence id" in item for item in rejections)
+
+
+def test_analyze_redacts_weaponized_fix_idea():
+    weaponized = dict(FULL_RESPONSE)
+    weaponized["fix_ideas"] = ["patch the bounds check", "use pwntools p64(0xdeadbeef) to pivot"]
+    client = FakeClient(json.dumps(weaponized))
+    result = analyze(client, _triage_data_with_sanitizer_record())
+    assert result["fix_ideas"] == ["patch the bounds check"]
+    assert any("redacted" in item for item in result["confidence_breakdown"]["warnings"])
+
+
+def test_analyze_low_confidence_without_sanitizer_record():
+    client = FakeClient(json.dumps(FULL_RESPONSE))
+    triage_data = {
+        "total_crashes": 1,
+        "unique_crash_frames": 1,
+        "triage_mode": "direct",
+        "groups": {"SIGSEGV": {"count": 1, "crashes": [{"file": "c1", "size": 10}]}},
+    }
+    result = analyze(client, triage_data)
+    assert result["confidence_breakdown"]["evidence_completeness"] == 0.0
+    assert result["confidence"] == 0.0

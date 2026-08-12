@@ -1,6 +1,22 @@
-"""Markdown run summary built from triage / binary / LLM artifacts."""
+"""Markdown run summary built from triage / binary / LLM artifacts.
+
+Per ROADMAP 2.5, this surfaces the richness the 2.1-2.4 pipeline now
+produces: a per-group bug class (when a sanitizer record is attached to a
+crash in that group) instead of just the raw frame/signature label, the
+crash-aware difficulty from `severity.py` (fused mitigation posture + fault
+signature, with its own confidence and rationale -- not just the plain
+protection-level/exploit-difficulty read off `binary_analysis` alone), and
+the LLM's grounded narrative including `what_would_confirm`. Severity is
+recomputed here directly from `triage`/`binary_data` (both already fully
+loaded by the caller) rather than threaded through a new artifact --
+`severity.assess_crash_difficulty` is a pure, cheap function over data this
+module already has in hand, once per displayed group, so no extra file or
+CLI plumbing is needed to keep this report honest and self-contained.
+"""
 
 from datetime import datetime
+
+from . import severity
 
 _PROTECTION_LABELS = (
     ("aslr_system", "ASLR"),
@@ -8,6 +24,32 @@ _PROTECTION_LABELS = (
     ("stack_canaries", "Stack canaries"),
     ("pie", "PIE"),
 )
+
+MAX_GROUPS_SHOWN = 5
+
+
+def _representative_crash_record(group_data):
+    for crash in group_data.get("crashes", []):
+        record = crash.get("sanitizer")
+        if record:
+            return record
+    return None
+
+
+def _bug_class_label(crash_record):
+    if not crash_record:
+        return None
+    bug_class = crash_record.get("bug_class") or "unknown"
+    details = []
+    access_type = crash_record.get("access_type")
+    access_size = crash_record.get("access_size")
+    if access_type:
+        details.append(access_type)
+    if access_size is not None:
+        details.append(f"{access_size} bytes")
+    if details:
+        return f"{bug_class} ({', '.join(details)})"
+    return bug_class
 
 
 def build_report(target_binary, source_file, triage, binary_data, llm_data):
@@ -24,12 +66,42 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data):
 
     groups = triage.get("groups", {})
     if groups:
-        lines.extend(["## Crash groups", ""])
-        for frame, data in list(groups.items())[:5]:
+        lines.extend(
+            [
+                "## Crash groups",
+                "",
+                "Ranked by crash count. Groups are collapsed via major/minor "
+                "stack-hash dedup (plus sanitizer bug class, when available) -- "
+                "not raw signature matching -- so `unique_crash_frames` above is "
+                "the true distinct-bug count, not the crash count.",
+                "",
+            ]
+        )
+        for index, (frame, data) in enumerate(list(groups.items())[:MAX_GROUPS_SHOWN], start=1):
             sample = data.get("crashes", [{}])[0]
+            count = data.get("count", 0)
+            crash_record = _representative_crash_record(data)
+            bug_class_label = _bug_class_label(crash_record)
+            heading = bug_class_label or frame
+
+            lines.append(f"### {index}. {heading} -- {count} crashes")
+            if bug_class_label and bug_class_label != frame:
+                lines.append(f"- Signature: `{frame}`")
+            lines.append(f"- Sample crash file: `{sample.get('file', 'n/a')}`")
+
+            assessment = severity.assess_crash_difficulty(binary_data, crash_record)
             lines.append(
-                f"- `{frame}`: {data.get('count', 0)} files, sample `{sample.get('file', 'n/a')}`"
+                f"- Difficulty: **{assessment['difficulty']}** "
+                f"(confidence {assessment['confidence']:.2f})"
             )
+            lines.append(f"- Why: {assessment['rationale']}")
+            lines.append(
+                "- Would raise confidence: " + assessment["would_increase_confidence"][0]
+            )
+            lines.append(
+                "- Currently limited by: " + assessment["would_decrease_confidence"][0]
+            )
+            lines.append("")
         lines.append("")
 
     mitigation_summary = binary_data.get("exploit_mitigation_summary", {})
@@ -91,6 +163,11 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data):
     if fix_ideas:
         lines.extend(["", "Fix ideas:"])
         lines.extend(f"- {item}" for item in fix_ideas)
+
+    what_would_confirm = llm_data.get("what_would_confirm", [])
+    if what_would_confirm:
+        lines.extend(["", "What would confirm this:"])
+        lines.extend(f"- {item}" for item in what_would_confirm)
 
     lines.append("")
     return "\n".join(lines)

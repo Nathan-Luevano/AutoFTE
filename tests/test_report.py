@@ -25,8 +25,80 @@ def test_build_report_with_populated_triage_groups():
     }
     text = build_report("./target", "vuln.c", triage, {}, {})
     assert "## Crash groups" in text
-    assert "`SIGSEGV`: 3 files, sample `c1`" in text
-    assert "`SIGABRT`: 2 files, sample `c2`" in text
+    assert "### 1. SIGSEGV -- 3 crashes" in text
+    assert "- Sample crash file: `c1`" in text
+    assert "### 2. SIGABRT -- 2 crashes" in text
+    assert "- Sample crash file: `c2`" in text
+    # every displayed group gets a crash-aware difficulty, not just a plain
+    # protection-level readout
+    assert "- Difficulty: **Easy**" in text
+    assert "- Why:" in text
+    assert "- Would raise confidence:" in text
+    assert "- Currently limited by:" in text
+
+
+def test_build_report_group_shows_bug_class_and_raw_signature():
+    triage = {
+        "total_crashes": 1,
+        "unique_crash_frames": 1,
+        "groups": {
+            "heap-buffer-overflow (write 8) in parse_header at parse.c:42": {
+                "count": 1,
+                "crashes": [
+                    {
+                        "file": "c1",
+                        "size": 10,
+                        "sanitizer": {
+                            "bug_class": "heap-buffer-overflow",
+                            "access_type": "write",
+                            "access_size": 8,
+                            "crash_stack": [{"frame": 0, "func": "parse_header"}],
+                        },
+                    }
+                ],
+            }
+        },
+    }
+    text = build_report("./target", "vuln.c", triage, {}, {})
+    assert "### 1. heap-buffer-overflow (write, 8 bytes) -- 1 crashes" in text
+    assert "- Signature: `heap-buffer-overflow (write 8) in parse_header at parse.c:42`" in text
+
+
+def test_build_report_group_difficulty_reflects_mitigation_posture():
+    triage = {
+        "total_crashes": 1,
+        "unique_crash_frames": 1,
+        "groups": {
+            "stack-smash": {
+                "count": 1,
+                "crashes": [
+                    {
+                        "file": "c1",
+                        "size": 10,
+                        "sanitizer": {
+                            "bug_class": "stack-buffer-overflow",
+                            "access_type": "write",
+                            "crash_stack": [{"frame": 0, "func": "vuln"}],
+                        },
+                    }
+                ],
+            }
+        },
+    }
+    weak_binary = {
+        "exploit_mitigation_summary": {"protection_count": 0},
+        "stack_canaries": {"enabled": False},
+        "pie": {"enabled": False},
+    }
+    strong_binary = {
+        "exploit_mitigation_summary": {"protection_count": 8},
+        "stack_canaries": {"enabled": True},
+        "pie": {"enabled": True},
+    }
+    weak_text = build_report("./target", "vuln.c", triage, weak_binary, {})
+    strong_text = build_report("./target", "vuln.c", triage, strong_binary, {})
+    assert "**Easy**" in weak_text
+    assert "**Hard**" in strong_text
 
 
 def test_build_report_limits_to_five_groups():
@@ -107,3 +179,13 @@ def test_build_report_llm_notes_absent_summary_and_bug_type():
     assert "## LLM notes" in text
     assert "LLM analysis was skipped or unavailable for this run." in text
     assert "Likely bug type" not in text
+
+
+def test_build_report_includes_what_would_confirm():
+    llm_data = {
+        "summary": "Looks like a heap overflow.",
+        "what_would_confirm": ["Confirm the overflowed region borders heap metadata"],
+    }
+    text = build_report("./target", "vuln.c", {}, {}, llm_data)
+    assert "What would confirm this:" in text
+    assert "- Confirm the overflowed region borders heap metadata" in text

@@ -77,3 +77,52 @@ def test_build_html_group_rows_limited_to_eight():
     html = build_html({"groups": groups}, {}, {})
     shown = sum(1 for i in range(12) if f">SIG{i}<" in html)
     assert shown == 8
+
+
+def test_build_html_group_row_shows_bug_class_and_signature():
+    triage = {
+        "groups": {
+            "heap-buffer-overflow (write 8) in parse_header at parse.c:42": {
+                "count": 3,
+                "crashes": [
+                    {
+                        "file": "c1",
+                        "size": 10,
+                        "sanitizer": {
+                            "bug_class": "heap-buffer-overflow",
+                            "access_type": "write",
+                            "access_size": 8,
+                            "crash_stack": [{"frame": 0, "func": "parse_header"}],
+                        },
+                    }
+                ],
+            }
+        }
+    }
+    html_out = build_html(triage, {}, {})
+    assert "heap-buffer-overflow (write, 8 bytes)" in html_out
+    assert "heap-buffer-overflow (write 8) in parse_header at parse.c:42" in html_out
+    assert "confidence)" in html_out
+    assert "<summary>why</summary>" in html_out
+
+
+def test_build_html_group_row_difficulty_present_without_sanitizer_record():
+    triage = {"groups": {"SIGSEGV": {"count": 1, "crashes": [{"file": "c1", "size": 1}]}}}
+    html_out = build_html(triage, {}, {})
+    assert "Easy" in html_out or "Medium" in html_out or "Hard" in html_out
+
+
+def test_build_html_includes_llm_narrative_fields():
+    llm_data = {
+        "summary": "A heap overflow.",
+        "likely_bug_type": "heap-buffer-overflow",
+        "confidence": 0.7,
+        "root_cause": "missing bounds check",
+        "what_would_confirm": ["Check adjacent heap chunk contents"],
+    }
+    html_out = build_html({}, {}, llm_data)
+    assert "A heap overflow." in html_out
+    assert "Root cause: missing bounds check" in html_out
+    assert "Confidence: 0.7" in html_out
+    assert "What would confirm this" in html_out
+    assert "Check adjacent heap chunk contents" in html_out
