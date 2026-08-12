@@ -1,0 +1,80 @@
+# EXAMPLE workflow for consumers of the AutoFTE action — copy this into
+# YOUR fuzzing project's `.github/workflows/`, then adapt the paths below.
+#
+# It is intentionally NOT wired to run on AutoFTE's own CI: this repo has
+# no real fuzzing crash corpus to triage, only the small bundled demo
+# target used for `autofte demo`. The trigger is `workflow_dispatch` only
+# so it sits here as documentation/reference and never fires on push/PR
+# against AutoFTE's own branches.
+#
+# A typical real-world setup instead triggers this after a scheduled
+# fuzzing job uploads its `crashes/` artifact, or on a cron schedule that
+# runs a short fuzz campaign and then triages whatever it found.
+
+name: "Example: fuzzing crash triage (adapt me, don't run me here)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-binary:
+        description: "Path to your fuzzed target binary"
+        required: true
+        default: "./target"
+      crashes-dir:
+        description: "Directory of crash files to triage"
+        required: true
+        default: "out/default/crashes"
+
+  # A realistic consumer might instead (or also) trigger on a schedule,
+  # once a fuzzing job has had time to accumulate crashes:
+  # schedule:
+  #   - cron: "0 6 * * *"   # once a day
+
+jobs:
+  triage:
+    name: Triage fuzzer crashes with AutoFTE
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # security-events: write is required for the SARIF upload step to
+      # publish results to the repo's code scanning dashboard.
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # In a real pipeline, this step (or an earlier job) would produce
+      # the crash corpus — e.g. by running a short AFL++/libFuzzer
+      # campaign, or by downloading a previously-uploaded crashes/
+      # artifact with actions/download-artifact@v4. Neither exists in
+      # this repo, which is why this workflow only runs on manual dispatch.
+      - name: (placeholder) build the fuzzed target / fetch crash artifacts
+        run: |
+          echo "Replace this step with your project's build + fuzz corpus fetch."
+          echo "Target: ${{ inputs.target-binary }}"
+          echo "Crashes: ${{ inputs.crashes-dir }}"
+
+      - name: Run AutoFTE and upload SARIF
+        uses: Nathan-Luevano/AutoFTE@main
+        id: autofte
+        with:
+          target-binary: ${{ inputs.target-binary }}
+          crashes-dir: ${{ inputs.crashes-dir }}
+          sarif-output: findings.sarif
+          # model / host are left unset here on purpose: most CI runners
+          # have no local Ollama to reach, so the action falls back to
+          # `--skip-llm` automatically. Point these at a self-hosted
+          # runner with Ollama installed (or a reachable remote instance)
+          # to get the plain-language write-up in CI too.
+
+      - name: Show triage stats
+        run: |
+          echo "Total crashes: ${{ steps.autofte.outputs.total-crash-count }}"
+          echo "Distinct root causes: ${{ steps.autofte.outputs.unique-crash-count }}"
+
+      - name: Upload SARIF as a build artifact too
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofte-findings
+          path: ${{ steps.autofte.outputs.sarif-path }}

@@ -41,3 +41,40 @@ jobs:
 
       - name: Run tests with coverage
         run: pytest -q --cov=autofte --cov-report=term-missing
+
+  bench:
+    name: bench (dedup accuracy regression gate)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the package
+        run: pip install -e .
+
+      - name: Run micro-corpus bench and gate on regression vs bench-baseline.json
+        shell: bash
+        run: |
+          set -uo pipefail
+          autofte bench --corpus micro --baseline bench-baseline.json \
+            --json bench-results.json | tee bench-output.txt
+          status=${PIPESTATUS[0]}
+          {
+            echo "### autofte bench --corpus micro"
+            echo '```'
+            cat bench-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Upload bench results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-micro
+          path: bench-results.json
