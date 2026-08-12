@@ -1,0 +1,145 @@
+name: "AutoFTE Crash Triage"
+description: >-
+  Runs AutoFTE's crash-triage pipeline against a directory of fuzzer crash
+  artifacts and emits a SARIF 2.1.0 log, optionally uploading it to GitHub
+  code scanning.
+author: "Nathan Luevano"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  target-binary:
+    description: "Path to the target binary that was fuzzed."
+    required: true
+  source-file:
+    description: >-
+      Path to the target's source file, used to ground the (optional) LLM
+      write-up and to recover source-line locations in the SARIF output.
+      Leave unset if the source isn't available in this workflow.
+    required: false
+    default: ""
+  crashes-dir:
+    description: "Directory containing the fuzzer's crash files to triage."
+    required: true
+  sarif-output:
+    description: "Path to write the SARIF 2.1.0 log to."
+    required: false
+    default: "findings.sarif"
+  model:
+    description: >-
+      Ollama model name to use for the optional LLM write-up step. Leave
+      unset (together with `host`) to run with `--skip-llm`, since most CI
+      runners have no local Ollama to reach.
+    required: false
+    default: ""
+  host:
+    description: >-
+      Ollama host to use for the optional LLM write-up step (e.g. a
+      self-hosted runner with Ollama installed, or a reachable remote
+      instance). Leave unset (together with `model`) to run with
+      `--skip-llm`.
+    required: false
+    default: ""
+  python-version:
+    description: "Python version to run AutoFTE with."
+    required: false
+    default: "3.11"
+  autofte-ref:
+    description: >-
+      Git ref (tag, branch, or commit) of Nathan-Luevano/AutoFTE to install
+      from source. Used as a fallback while AutoFTE has no PyPI release yet;
+      ignored once `autofte-version` resolves a real PyPI release.
+    required: false
+    default: "main"
+  autofte-version:
+    description: >-
+      A PyPI version specifier for `autofte` (e.g. "0.2.0" or ">=0.2,<0.3").
+      When set, installs from PyPI instead of from `autofte-ref`. Leave
+      unset until a release is actually tagged on PyPI.
+    required: false
+    default: ""
+  upload-sarif:
+    description: "Whether to upload the SARIF log to GitHub code scanning."
+    required: false
+    default: "true"
+
+outputs:
+  sarif-path:
+    description: "Path to the SARIF 2.1.0 log written by this action."
+    value: ${{ steps.pipeline.outputs.sarif-path }}
+  unique-crash-count:
+    description: "Number of distinct crash groups (root causes) found."
+    value: ${{ steps.pipeline.outputs.unique-crash-count }}
+  total-crash-count:
+    description: "Total number of crash files triaged."
+    value: ${{ steps.pipeline.outputs.total-crash-count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install system tools (gdb, binutils)
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gdb binutils
+
+    - name: Install AutoFTE from PyPI
+      if: ${{ inputs.autofte-version != '' }}
+      shell: bash
+      run: pip install "autofte==${{ inputs.autofte-version }}"
+
+    - name: Install AutoFTE from git ref
+      if: ${{ inputs.autofte-version == '' }}
+      shell: bash
+      run: pip install "git+https://github.com/Nathan-Luevano/AutoFTE.git@${{ inputs.autofte-ref }}"
+
+    - name: Run AutoFTE pipeline
+      id: pipeline
+      shell: bash
+      run: |
+        set -eo pipefail
+
+        args=(
+          "${{ inputs.target-binary }}"
+        )
+        if [ -n "${{ inputs.source-file }}" ]; then
+          args+=("${{ inputs.source-file }}")
+        fi
+        args+=(
+          --crashes-dir "${{ inputs.crashes-dir }}"
+          --sarif "${{ inputs.sarif-output }}"
+        )
+
+        if [ -n "${{ inputs.model }}" ] || [ -n "${{ inputs.host }}" ]; then
+          if [ -n "${{ inputs.model }}" ]; then
+            args+=(--model "${{ inputs.model }}")
+          fi
+          if [ -n "${{ inputs.host }}" ]; then
+            args+=(--host "${{ inputs.host }}")
+          fi
+        else
+          args+=(--skip-llm)
+        fi
+
+        autofte pipeline "${args[@]}"
+
+        echo "sarif-path=${{ inputs.sarif-output }}" >> "$GITHUB_OUTPUT"
+
+        if [ -f crash_triage.json ]; then
+          total=$(python3 -c "import json; print(json.load(open('crash_triage.json')).get('total_crashes', ''))" 2>/dev/null || true)
+          unique=$(python3 -c "import json; print(json.load(open('crash_triage.json')).get('unique_crash_frames', ''))" 2>/dev/null || true)
+          echo "total-crash-count=${total}" >> "$GITHUB_OUTPUT"
+          echo "unique-crash-count=${unique}" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Upload SARIF to code scanning
+      if: ${{ inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-output }}
