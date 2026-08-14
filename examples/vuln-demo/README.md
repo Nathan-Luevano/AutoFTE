@@ -23,7 +23,7 @@ make target_asan     # builds ./target_asan (AddressSanitizer-instrumented)
 ../../scripts/fuzz.sh $(pwd)/target in ../../out   # from this directory, or see scripts/fuzz.sh defaults
 ```
 
-`crashes/` ships ~95 pre-generated crash files spread across all four bugs
+`crashes/` ships 12 pre-generated crash files spread across all four bugs
 (with size/pattern variation within each), each independently verified to
 crash `target_asan`. `autofte demo` uses them directly, no fuzzing campaign
 required.
