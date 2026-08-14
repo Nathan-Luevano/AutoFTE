@@ -30,6 +30,28 @@ def resolve_host(explicit=None):
     return (explicit or os.environ.get("OLLAMA_HOST") or DEFAULT_HOST).rstrip("/")
 
 
+def resolve_timeout(explicit=None):
+    """Seconds to wait for a single Ollama `/api/generate` call, or `None`
+    for no timeout at all. There is no hard-coded cap by default: a cold
+    model load or CPU-only/underpowered hardware can legitimately take far
+    longer than a typical GPU box, and a slow answer should just take
+    longer rather than get killed part way through. Resolution order:
+    explicit ``--llm-timeout``, then ``AUTOFTE_LLM_TIMEOUT``, then
+    unbounded. `0` (from either source) also means unbounded, since
+    ``requests`` itself treats `timeout=0` as "fail instantly" rather than
+    "no timeout" -- a `0` here is far more likely to be someone clearing
+    the value than someone asking for that.
+    """
+    if explicit is not None:
+        return explicit or None
+
+    env_timeout = os.environ.get("AUTOFTE_LLM_TIMEOUT")
+    if env_timeout:
+        return float(env_timeout) or None
+
+    return None
+
+
 def list_installed_models(host, timeout=5):
     response = requests.get(f"{host}/api/tags", timeout=timeout)
     response.raise_for_status()

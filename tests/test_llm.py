@@ -5,6 +5,7 @@ import pytest
 import requests
 
 from autofte.llm import (
+    DEFAULT_MAX_TOKENS,
     RESPONSE_SCHEMA,
     EvidenceLedger,
     LLMResponseError,
@@ -213,6 +214,65 @@ def test_ollama_client_ask_returns_stripped_response(monkeypatch):
     assert result == "some answer"
 
 
+def test_ollama_client_ask_defaults_to_instance_timeout(monkeypatch):
+    # No `timeout` kwarg passed to `.ask()` -- it should fall back to
+    # whatever timeout the client was constructed with, not a hard-coded
+    # value. `None` (unbounded) is the client's own default.
+    client = OllamaClient(model="llama3", host="http://x")
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["timeout"] = timeout
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello")
+    assert captured["timeout"] is None
+
+
+def test_ollama_client_ask_uses_configured_instance_timeout(monkeypatch):
+    client = OllamaClient(model="llama3", host="http://x", timeout=30)
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["timeout"] = timeout
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello")
+    assert captured["timeout"] == 30
+
+
+def test_ollama_client_ask_explicit_timeout_overrides_instance(monkeypatch):
+    client = OllamaClient(model="llama3", host="http://x", timeout=30)
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["timeout"] = timeout
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello", timeout=5)
+    assert captured["timeout"] == 5
+
+
+def test_ollama_client_ask_wraps_network_errors(monkeypatch):
+    # `check()` only proves Ollama is reachable, not that `/api/generate`
+    # will answer within `timeout` -- a cold model load can pass the
+    # preflight and still time out here. Regression for the crash where an
+    # uncaught `requests.exceptions.ReadTimeout` propagated all the way out
+    # of `autofte demo`/`cmd_pipeline` instead of degrading gracefully like
+    # the unreachable-Ollama case already does.
+    client = OllamaClient(model="llama3", host="http://x")
+
+    def fake_post(url, json, timeout):
+        raise requests.exceptions.ReadTimeout("Read timed out. (read timeout=90)")
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    with pytest.raises(LLMResponseError, match="Ollama request failed"):
+        client.ask("hello")
+
+
 def test_ollama_client_ask_without_schema_omits_format(monkeypatch):
     client = OllamaClient(model="llama3", host="http://x")
     captured = {}
@@ -253,6 +313,108 @@ def test_ollama_client_ask_with_schema_honors_explicit_temperature(monkeypatch):
     client.ask("hello", schema=RESPONSE_SCHEMA, temperature=0.7)
     assert captured["payload"]["format"] == RESPONSE_SCHEMA
     assert captured["payload"]["options"]["temperature"] == 0.7
+
+
+def test_ollama_client_ask_defaults_num_predict_to_default_max_tokens(monkeypatch):
+    # Regression for the crash where hybrid-reasoning models (qwen3.x,
+    # glm-4.7-flash, gpt-oss) exhausted a too-small shared token budget
+    # entirely inside their hidden `thinking` phase and shipped an empty
+    # `response`. 1200 was too small on real hardware; nothing should
+    # pass that literal value anymore.
+    client = OllamaClient(model="llama3", host="http://x")
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["payload"] = json
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello")
+    assert captured["payload"]["options"]["num_predict"] == DEFAULT_MAX_TOKENS
+    assert DEFAULT_MAX_TOKENS > 1200
+
+
+def test_ollama_client_ask_explicit_max_tokens_overrides_default(monkeypatch):
+    client = OllamaClient(model="llama3", host="http://x")
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["payload"] = json
+        return FakeResponse({"response": "ok"})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    client.ask("hello", max_tokens=42)
+    assert captured["payload"]["options"]["num_predict"] == 42
+
+
+def test_ollama_client_ask_raises_actionable_error_when_thinking_starves_budget(monkeypatch):
+    # Reproduces the exact shape of Ollama's response for a hybrid-
+    # reasoning model that ran out of `num_predict` budget mid-thought:
+    # `response` is empty, `done_reason` is "length", and `thinking` is
+    # non-empty. This must be distinguished from a plain empty response
+    # so the error tells the operator what actually happened.
+    client = OllamaClient(model="llama3", host="http://x")
+
+    def fake_post(url, json, timeout):
+        return FakeResponse(
+            {
+                "response": "",
+                "thinking": "Let me reconsider... actually let me reconsider again...",
+                "done_reason": "length",
+            }
+        )
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    with pytest.raises(LLMResponseError, match="thinking"):
+        client.ask("hello")
+
+
+def test_ollama_client_ask_plain_empty_response_does_not_raise(monkeypatch):
+    # A model that simply returns nothing at all (no `thinking` field
+    # either) must still surface as a plain empty string -- that's
+    # extract_json's job to reject, not ask()'s.
+    client = OllamaClient(model="llama3", host="http://x")
+
+    def fake_post(url, json, timeout):
+        return FakeResponse({"response": ""})
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    assert client.ask("hello") == ""
+
+
+def test_ollama_client_ask_falls_back_to_thinking_when_response_empty_and_done(monkeypatch):
+    # Confirmed empirically against glm-4.7-flash and qwen3.5:27b on real
+    # production prompts: the model finishes cleanly (done_reason "stop",
+    # well under the token budget) but writes its whole answer into
+    # `thinking` and leaves `response` empty. This is NOT the starved-
+    # budget case (that's done_reason "length", tested above) -- here the
+    # model is done, and `thinking` is the only place its answer landed.
+    client = OllamaClient(model="llama3", host="http://x")
+
+    def fake_post(url, json, timeout):
+        return FakeResponse(
+            {"response": "", "thinking": '{"summary": "ok"}', "done_reason": "stop"}
+        )
+
+    monkeypatch.setattr(client.session, "post", fake_post)
+    assert client.ask("hello") == '{"summary": "ok"}'
+
+
+# --------------------------------------------------------------------------
+# RESPONSE_SCHEMA narrative field length caps
+# --------------------------------------------------------------------------
+
+def test_response_schema_reasoning_has_max_length():
+    # Regression for the mechanism where a non-thinking model (gemma4)
+    # degenerated into repeated tokens inside the unbounded `reasoning`
+    # string under grammar-constrained decoding, consuming the whole
+    # token budget before the JSON object could close.
+    assert RESPONSE_SCHEMA["properties"]["reasoning"]["maxLength"] > 0
+
+
+@pytest.mark.parametrize("field", ["reasoning", "summary", "root_cause", "likely_bug_type"])
+def test_response_schema_narrative_fields_are_bounded(field):
+    assert "maxLength" in RESPONSE_SCHEMA["properties"][field]
 
 
 # --------------------------------------------------------------------------

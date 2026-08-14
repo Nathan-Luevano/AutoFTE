@@ -8,6 +8,7 @@ from autofte.config import (
     list_installed_models,
     resolve_host,
     resolve_model,
+    resolve_timeout,
 )
 
 # --------------------------------------------------------------------------
@@ -33,6 +34,35 @@ def test_resolve_host_default(monkeypatch):
 def test_resolve_host_strips_trailing_slash(monkeypatch):
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
     assert resolve_host("http://x:1/") == "http://x:1"
+
+
+# --------------------------------------------------------------------------
+# resolve_timeout
+# --------------------------------------------------------------------------
+
+def test_resolve_timeout_explicit_wins(monkeypatch):
+    monkeypatch.setenv("AUTOFTE_LLM_TIMEOUT", "30")
+    assert resolve_timeout(120) == 120
+
+
+def test_resolve_timeout_env_var_fallback(monkeypatch):
+    monkeypatch.setenv("AUTOFTE_LLM_TIMEOUT", "45")
+    assert resolve_timeout() == 45.0
+
+
+def test_resolve_timeout_default_is_unbounded(monkeypatch):
+    monkeypatch.delenv("AUTOFTE_LLM_TIMEOUT", raising=False)
+    assert resolve_timeout() is None
+
+
+def test_resolve_timeout_explicit_zero_means_unbounded(monkeypatch):
+    monkeypatch.delenv("AUTOFTE_LLM_TIMEOUT", raising=False)
+    assert resolve_timeout(0) is None
+
+
+def test_resolve_timeout_env_zero_means_unbounded(monkeypatch):
+    monkeypatch.setenv("AUTOFTE_LLM_TIMEOUT", "0")
+    assert resolve_timeout() is None
 
 
 # --------------------------------------------------------------------------
