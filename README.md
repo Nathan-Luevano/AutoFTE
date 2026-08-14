@@ -19,8 +19,11 @@
 
 You fuzzed something and now you have a directory full of crash files. AutoFTE groups them by root cause, checks the target binary's exploit mitigations, and — optionally — asks a local LLM to explain what actually broke and whether it's worth your time. One command, fully offline, nothing ever leaves your machine.
 
-<!-- TODO: asciinema recording of `autofte demo`, see CONTRIBUTING.md -->
-*(Demo recording pending — record `autofte demo` with [asciinema](https://asciinema.org/) and convert it to a GIF with [agg](https://github.com/asciinema/agg), then swap it in here.)*
+<p align="center">
+  <img src="autofte-demo-combined.gif" alt="Recording of autofte demo --verbose, stitched together with the dashboard it produces: the terminal walkthrough shows the vulnerable source snippet being tested, the pre-generated crash count, the full triage/binscan/LLM trace, and the final one-line verdict, then the recording continues into a scroll through the static dashboard the run just wrote." width="760">
+</p>
+
+*(The terminal half is recorded with [asciinema](https://asciinema.org/) and converted to a GIF with [agg](https://github.com/asciinema/agg); the dashboard half is a [puppeteer](https://pptr.dev/) screenshot turned into a scrolling clip; the two are stitched into one GIF with `ffmpeg`. See [`scripts/record-demo.sh`](scripts/record-demo.sh), [`scripts/screenshot-dashboard.mjs`](scripts/screenshot-dashboard.mjs), [`scripts/stitch-demo.sh`](scripts/stitch-demo.sh), and [CONTRIBUTING.md](CONTRIBUTING.md) to reproduce it. That's `autofte demo --verbose` — the default, no-arguments run is quieter, see below.)*
 
 ### Install, one line
 
@@ -35,24 +38,25 @@ pipx install autofte
 This is real output from `autofte demo` — zero arguments, no fuzzing campaign
 required. The bundled demo target has four genuinely distinct, deliberately
 reachable bugs (a stack overflow, a heap overflow, a use-after-free, and a
-NULL deref); 16 pre-generated crashes are spread across all four so the
-run actually has something to collapse, not one bug wearing 16 hats:
+NULL deref); 12 pre-generated crashes are spread across all four so the
+run actually has something to collapse, not one bug wearing 12 hats:
 
 ```
 $ autofte demo
 AutoFTE demo: building and triaging the bundled vuln-demo target (vuln-demo/target_asan)
 
 
-→ 16 crashes · 4 root causes · #1 stack-buffer-overflow (write 66) in vuln_stack_overflow at vuln.c:39 (4 crashes) — Medium · 4/4 reproducible
+→ 12 crashes · 4 root causes · #1 stack-buffer-overflow (write 66) in vuln_stack_overflow at vuln.c:39 (3 crashes) — Medium · 3/3 reproducible
 
 Artifacts written to autofte-demo-output/
 ```
 
 That's the whole default output — quiet on purpose, so the one line that
 matters isn't buried under pipeline noise. It ran in well under a minute on
-an ordinary laptop (no fuzzing campaign, no manual gdb, no eyeballing 16
+an ordinary laptop (no fuzzing campaign, no manual gdb, no eyeballing 12
 files by hand). Run `autofte demo --verbose` for the full triage/binscan/LLM
-trace, or open `autofte-demo-output/dashboard/index.html` /
+trace (that's what the recording above shows), or open
+`autofte-demo-output/dashboard/index.html` /
 `analysis_summary.md` for the other three groups AutoFTE found in the same
 run — a heap overflow, a use-after-free, and a NULL deref, each correctly
 separated from the others with the real function name and line, an honest
@@ -93,7 +97,10 @@ CASR is the closer, more mature competitor on triage and severity — this table
 - the LLM's grounded narrative, if it ran, including its "what would confirm this" list
 - "next checks" and "fix ideas" lists pulled from the LLM write-up
 
-*(No screenshot yet — TODO for whoever records the demo GIF to grab one alongside it.)*
+This is the same `autofte demo` run from the recording above, continued —
+the terminal half ends by writing this dashboard to
+`autofte-demo-output/dashboard/`, and the recording's second half above is
+a scroll through it, top to bottom.
 
 ### Measured, not assumed
 
@@ -205,7 +212,7 @@ Nothing on this page is asserted; it's run.
 
 | | |
 |---|---|
-| 🎬 **Demo** | `autofte demo` — zero arguments. Builds the bundled multi-bug target (4 distinct, deliberately reachable bugs) if needed, triages 16 pre-seeded crashes into their real root causes, and prints a one-line verdict in well under a minute. Quiet by default; `--verbose` shows the full trace. |
+| 🎬 **Demo** | `autofte demo` — zero arguments. Builds the bundled multi-bug target (4 distinct, deliberately reachable bugs) if needed, triages 12 pre-seeded crashes into their real root causes, and prints a one-line verdict in well under a minute. Quiet by default; `--verbose` shows the full trace. |
 | 🧩 **Triage** | Groups crash files with major/minor stack-hash dedup — ASan/UBSan reports when the target is sanitizer-built, gdb backtraces otherwise, exit-signal grouping as the last resort. Real, distinct bugs, not hundreds of individual files. |
 | 🧪 **Sanitizer ingestion** | Parses real ASan/UBSan reports into a normalized record — bug class, read/write, access size, fault address, allocation/free stacks — the highest-signal input to both dedup and the LLM write-up. |
 | 🛡️ **Binscan** | Checks a binary for NX, PIE, RELRO, stack canaries, FORTIFY_SOURCE, and dangerous libc calls (`strcpy`, `gets`, ...). |
@@ -267,7 +274,7 @@ autofte doctor
 autofte demo
 ```
 
-No arguments needed. This is the command behind the ["look what it found"](#look-what-it-found) output above — it builds the bundled ASan-instrumented `examples/vuln-demo` target if it isn't built yet, triages the 16 crash files shipped in the repo (spread across 4 distinct bugs), runs `binscan`, attempts an LLM write-up, and ends on a verdict line. Add `--verbose` for the full step-by-step trace; artifacts land in `./autofte-demo-output/`, not your bare working directory.
+No arguments needed. This is the command behind the ["look what it found"](#look-what-it-found) output above — it builds the bundled ASan-instrumented `examples/vuln-demo` target if it isn't built yet, triages the 12 crash files shipped in the repo (spread across 4 distinct bugs), runs `binscan`, attempts an LLM write-up, and ends on a verdict line. Add `--verbose` for the full step-by-step trace; artifacts land in `./autofte-demo-output/`, not your bare working directory.
 
 ### On your own crashes
 
@@ -357,16 +364,26 @@ export AUTOFTE_LLM_MODEL=qwen3-coder:30b
 
 `OLLAMA_HOST` (or `--host`) controls where AutoFTE looks for Ollama; defaults to `http://localhost:11434`.
 
+There's no timeout on the model call by default — a cold model load or CPU-only
+inference can legitimately take a long time, and a hard cap just turns "slow"
+into "silently skipped." Set `AUTOFTE_LLM_TIMEOUT` (or pass `--llm-timeout`,
+in seconds) if you'd rather it give up after a bound you choose.
+
 ## Repo layout
 
 ```
 autofte/                  installable package: triage, dedup, sanitizers, binary_analysis, severity, llm, sarif,
-                           report, dashboard, doctor, config, cli
+                           report, dashboard, doctor, config, cli, bench, metrics, io_utils, paths,
+                           vendored_ignore_lists, crash_display
 autofte/demo_assets/      packaged copy of the vuln-demo target so `autofte demo` works from a wheel/pipx/Docker
                            install, not just a source checkout — kept in sync with examples/vuln-demo/
 examples/vuln-demo/       intentionally vulnerable demo target + Makefile + seed corpus + pre-generated crashes
                            (the source-of-truth dev copy)
-scripts/                  thin AFL++ wrappers (fuzz.sh, minimize.sh) + the PyInstaller entry point
+benchmarks/                accuracy regression gate: micro corpus baseline, dedup baseline.json, and sweep
+                           results consumed by `autofte bench` (see benchmarks/results.md)
+scripts/                  AFL++ wrappers (fuzz.sh, minimize.sh), the PyInstaller entry point, the end-to-end
+                           smoke-test.sh, demo-recording helpers (record-demo.sh, screenshot-dashboard.mjs,
+                           stitch-demo.sh), and one-off accuracy investigation scripts
 tests/                    pytest suite
 Dockerfile                container image; build locally with `docker build -t autofte .` (not published)
 pyinstaller.spec          single-file binary build spec, used by the release workflow
@@ -383,7 +400,7 @@ pytest
 ruff check .
 ```
 
-428 tests: mocked subprocess calls for the tool-parsing logic, plus real end-to-end passes against compiled binaries (including real multi-compiler ASan builds), a real local Ollama call exercising the evidence-cited/schema-constrained LLM path, and `autofte bench` runs against a real, independently-downloaded 325,000-report ground-truth corpus (see [`benchmarks/results.md`](benchmarks/results.md) for the measured accuracy numbers). See [CONTRIBUTING.md](CONTRIBUTING.md) for the commit convention and how to add a new binscan check.
+491 tests: mocked subprocess calls for the tool-parsing logic, plus real end-to-end passes against compiled binaries (including real multi-compiler ASan builds), a real local Ollama call exercising the evidence-cited/schema-constrained LLM path, and `autofte bench` runs against a real, independently-downloaded 325,000-report ground-truth corpus (see [`benchmarks/results.md`](benchmarks/results.md) for the measured accuracy numbers). [`scripts/smoke-test.sh`](scripts/smoke-test.sh) is a separate, manually-run end-to-end check against the real CLI (doctor, demo, triage, binscan, crash-info, bench, pipeline, dashboard) rather than the mocked unit-test boundaries — see [CONTRIBUTING.md](CONTRIBUTING.md#before-opening-a-pr) for when to run it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the commit convention and how to add a new binscan check.
 
 ## Roadmap
 
