@@ -20,10 +20,8 @@
 You fuzzed something and now you have a directory full of crash files. AutoFTE groups them by root cause, checks the target binary's exploit mitigations, and — optionally — asks a local LLM to explain what actually broke and whether it's worth your time. One command, fully offline, nothing ever leaves your machine.
 
 <p align="center">
-  <img src="autofte-demo-combined.gif" alt="Recording of autofte demo --verbose, stitched together with the dashboard it produces: the terminal walkthrough shows the vulnerable source snippet being tested, the pre-generated crash count, the full triage/binscan/LLM trace, and the final one-line verdict, then the recording continues into a scroll through the static dashboard the run just wrote." width="760">
+  <img src="autofte-demo-combined.gif" alt="Terminal recording of autofte demo --verbose, followed by a scroll through the dashboard it produces." width="760">
 </p>
-
-*(The terminal half is recorded with [asciinema](https://asciinema.org/) and converted to a GIF with [agg](https://github.com/asciinema/agg); the dashboard half is a [puppeteer](https://pptr.dev/) screenshot turned into a scrolling clip; the two are stitched into one GIF with `ffmpeg`. See [`scripts/record-demo.sh`](scripts/record-demo.sh), [`scripts/screenshot-dashboard.mjs`](scripts/screenshot-dashboard.mjs), [`scripts/stitch-demo.sh`](scripts/stitch-demo.sh), and [CONTRIBUTING.md](CONTRIBUTING.md) to reproduce it. That's `autofte demo --verbose` — the default, no-arguments run is quieter, see below.)*
 
 ### Install, one line
 
@@ -35,11 +33,7 @@ pipx install autofte
 
 ### Look what it found
 
-This is real output from `autofte demo` — zero arguments, no fuzzing campaign
-required. The bundled demo target has four genuinely distinct, deliberately
-reachable bugs (a stack overflow, a heap overflow, a use-after-free, and a
-NULL deref); 12 pre-generated crashes are spread across all four so the
-run actually has something to collapse, not one bug wearing 12 hats:
+Real output from `autofte demo` — zero arguments, no fuzzing campaign needed. The bundled demo target has four distinct, deliberately reachable bugs (stack overflow, heap overflow, use-after-free, NULL deref); 12 pre-generated crashes are spread across all four, so the run has something real to collapse:
 
 ```
 $ autofte demo
@@ -51,17 +45,7 @@ AutoFTE demo: building and triaging the bundled vuln-demo target (vuln-demo/targ
 Artifacts written to autofte-demo-output/
 ```
 
-That's the whole default output — quiet on purpose, so the one line that
-matters isn't buried under pipeline noise. It ran in well under a minute on
-an ordinary laptop (no fuzzing campaign, no manual gdb, no eyeballing 12
-files by hand). Run `autofte demo --verbose` for the full triage/binscan/LLM
-trace (that's what the recording above shows), or open
-`autofte-demo-output/dashboard/index.html` /
-`analysis_summary.md` for the other three groups AutoFTE found in the same
-run — a heap overflow, a use-after-free, and a NULL deref, each correctly
-separated from the others with the real function name and line, an honest
-per-group difficulty and confidence, and (with Ollama reachable) a grounded,
-evidence-cited LLM write-up like this real one for the heap-overflow group:
+That's the whole default output — quiet on purpose. Run `autofte demo --verbose` for the full trace (shown in the recording above), or open `autofte-demo-output/dashboard/index.html` / `analysis_summary.md` for the other three groups AutoFTE found — a heap overflow, a use-after-free, and a NULL deref — each correctly separated with the real function/line, an honest difficulty + confidence, and (with Ollama reachable) a grounded, evidence-cited LLM write-up like this real one:
 
 > Heap buffer overflow (write 65) in vuln_heap_overflow function. Unbounded
 > memcpy in vuln_heap_overflow function.
@@ -69,9 +53,7 @@ evidence-cited LLM write-up like this real one for the heap-overflow group:
 > vuln_heap_overflow"; exploitability_class: `insufficient_evidence` — the
 > model isn't guessing at exploitability it can't demonstrate.)*
 
-No crash data, source, or binary ever leaves your machine — the LLM step is
-optional and local, and skips cleanly instead of failing the run if Ollama
-isn't reachable.
+No crash data, source, or binary ever leaves your machine — the LLM step is optional and local, and skips cleanly if Ollama isn't reachable.
 
 ### AutoFTE vs. the alternatives
 
@@ -85,7 +67,7 @@ isn't reachable.
 | SARIF / CI code-scanning output | No | No | Yes | Yes (`--format sarif`, `--sarif <path>`, or the bundled [GitHub Action](#github-action)) |
 | Sends anything off-box | No | No | No | No — the LLM step is local-only (Ollama) or skipped entirely |
 
-CASR is the closer, more mature competitor on triage and severity — this table isn't claiming AutoFTE has more miles on it. The differentiator is the offline, plain-language explanation step, grounded in the same structured evidence the dedup/severity logic uses, plus a one-command, `pipx`-install experience with no Docker/ptrace setup required.
+CASR is the more mature competitor on triage and severity. AutoFTE's differentiator is the offline, plain-language explanation step grounded in that same structured evidence, plus a one-command `pipx` install with no Docker/ptrace setup.
 
 ### The dashboard
 
@@ -97,33 +79,13 @@ CASR is the closer, more mature competitor on triage and severity — this table
 - the LLM's grounded narrative, if it ran, including its "what would confirm this" list
 - "next checks" and "fix ideas" lists pulled from the LLM write-up
 
-This is the same `autofte demo` run from the recording above, continued —
-the terminal half ends by writing this dashboard to
-`autofte-demo-output/dashboard/`, and the recording's second half above is
-a scroll through it, top to bottom.
+This is the same run from the recording above, continued — the terminal half ends by writing this dashboard, and the recording's second half is a scroll through it, top to bottom.
 
 ### Measured, not assumed
 
-Most crash-triage tools never publish how often their dedup is actually
-right. AutoFTE does, against the same real ground-truth corpus the
-published literature uses — the [GPTrace/Igor benchmark](https://zenodo.org/records/18708473)
-(325,044 labeled ASan reports, 50 real bugs, 14 real C/C++ targets,
-Apache-2.0). `autofte bench --corpus igor` reproduces this on demand
-(`scripts/fetch_bench_corpus.sh` downloads and MD5-verifies the corpus
-first); the full history of every change and its measured effect is in
-[`benchmarks/results.md`](benchmarks/results.md), not just the current
-snapshot below.
+Most crash-triage tools never publish how often their dedup is actually right. AutoFTE does, against the same real ground-truth corpus the published literature uses — the [GPTrace/Igor benchmark](https://zenodo.org/records/18708473) (325,044 labeled ASan reports, 50 real bugs, 14 real C/C++ targets, Apache-2.0). `autofte bench --corpus igor` reproduces this on demand (`scripts/fetch_bench_corpus.sh` downloads and MD5-verifies the corpus first); the full history of every change and its measured effect is in [`benchmarks/results.md`](benchmarks/results.md), not just the snapshot below.
 
-The GPTrace ICSE'26 paper that published this corpus computes purity,
-inverse purity, and F-measure **per target and averages the 14 targets
-unweighted** (its own §4.1 defines the formulas per-target, and its
-Table 3 "Average" row reproduces to the nearest integer only under that
-unweighted mean — confirmed by hand-recomputing all 14 rows three
-different ways; see "TASK 1" in
-[`benchmarks/results.md`](benchmarks/results.md)). AutoFTE reports both
-aggregations, side by side, on every run — the paper's own basis (macro)
-and the stricter whole-corpus pooled number (micro) the paper never
-computes at all:
+The GPTrace paper averages its 14 targets unweighted (macro). AutoFTE reports both that basis and the stricter whole-corpus pooled number (micro) the paper never computes:
 
 | | Purity | Inverse purity | F-measure |
 |---|---|---|---|
@@ -132,64 +94,13 @@ computes at all:
 | **AutoFTE, macro (per-target mean)** | **97.7%** | **90.5%** | **91.9%** |
 | **AutoFTE, micro (pooled, all 325,044 reports)** | **89.9%** | **80.3%** | **78.3%** |
 
-**On the paper's own basis, AutoFTE is close behind GPTrace and ahead of
-Crashwalk on every metric. On the stricter pooled basis, it is not —
-and that pooled number is the honest floor, not a footnote.** Purity
-measures whether two *different* bugs ever get silently merged into one
-bucket — the worst failure mode a triage tool can have, since the
-merged-away bug doesn't show up as a wrong answer anywhere in the output,
-it just isn't in the report at all. Inverse purity measures the opposite
-failure — one real bug shattered across many "unique" buckets, which is
-the specific failure mode that breaks the "N crashes → a few real bugs"
-promise this tool exists to keep. Whichever aggregation you read, purity
-is the tighter number of the two: macro purity (97.7%) is within a point
-of the published macro baseline, while pooled purity (89.9%) sits at what
-a separate ceiling analysis
-([`scripts/purity_ceiling.py`](scripts/purity_ceiling.py), which imports
-nothing from AutoFTE and so can't be flattered by a bug in our own dedup)
-found is the information-theoretic maximum achievable from stack data
-alone on this corpus (89.4%) — AutoFTE is not leaving purity on the
-table by pooled measure either, it has run out of signal a stack hash can
-give it. Every attempted fix and its measured effect, including the ones
-that moved nothing and the ones whose own predictions turned out to be
-wrong, is logged in [`benchmarks/results.md`](benchmarks/results.md)
-rather than only the wins that made the cut.
+On the paper's own basis, AutoFTE is close behind GPTrace and ahead of Crashwalk on every metric. On the stricter pooled basis it is not — that's the honest floor, not a footnote. Purity measures whether two *different* bugs ever get silently merged into one bucket, the worst failure mode a triage tool can have, since the merged-away bug doesn't show up as a wrong answer anywhere. Inverse purity measures the opposite: one real bug shattered across many "unique" buckets. Pooled purity (89.9%) sits right at the information-theoretic ceiling a stack hash can achieve on this corpus (89.4%, per [`scripts/purity_ceiling.py`](scripts/purity_ceiling.py), which imports nothing from AutoFTE) — AutoFTE isn't leaving purity on the table, it's out of signal a stack hash can give it.
 
-**The aggregate hides real per-target spread — so it isn't the only number
-published.** `autofte bench --corpus igor --per-target` reports every one
-of the 14 real targets separately, and the worst cases are named explicitly
-in [`benchmarks/results.md`](benchmarks/results.md) (search "W3 — per-target accuracy breakdown"):
-`libxml2__xmllint` — the same target the published literature itself cites
-as its worst case — has purity of only 83% (real bugs measurably merging,
-AutoFTE's hardest target), while `php__exif` shatters its one real bug into
-18 buckets (inverse purity 48%). Six of the 14 targets score at or near a
-perfect 1.0 on every metric — the aggregate is a genuine average across a
-real spread, not an evenly-mediocre number, and no target's number is
-withheld.
+The aggregate hides real per-target spread, so it isn't the only number published: `autofte bench --corpus igor --per-target` reports all 14 real targets separately (see [`benchmarks/results.md`](benchmarks/results.md)). `libxml2__xmllint` — the published literature's own worst case — has purity of only 83% (real bugs measurably merging); `php__exif` shatters its one real bug into 18 buckets (inverse purity 48%). Six of the 14 targets score at or near a perfect 1.0.
 
-`xmllint`'s purity problem is root-caused, not just measured — and the
-root cause is a structural ceiling, not a fixable dedup bug.
-[`scripts/diagnose_xmllint_purity.py`](scripts/diagnose_xmllint_purity.py)
-found that 89% of its purity loss sits in one bucket where two of the
-ground-truth labels share a byte-identical 4-frame crash-site stack
-prefix — they diverge only in recursive-call-depth frames that track how
-deeply nested the input XML is, not in anything that distinguishes one
-bug from the other. Three smaller buckets are fully byte-identical stacks
-end to end. No stack-hash dedup, however tuned, can split those apart:
-the ground-truth labels disagree about crashes that produce the same
-evidence. That's a real, disclosed limit of the corpus's labeling at that
-one target, not a gap in what AutoFTE measures or reports.
+`xmllint`'s purity problem is root-caused, not just measured: [`scripts/diagnose_xmllint_purity.py`](scripts/diagnose_xmllint_purity.py) found that 89% of its purity loss sits in one bucket where two ground-truth labels share a byte-identical 4-frame crash-site stack, diverging only in recursion-depth frames — no stack-hash dedup can split that apart. That's a real, disclosed limit of the corpus's labeling at that one target, not a gap in what AutoFTE measures.
 
-A second caveat that used to apply and no longer does, kept here so the
-history is visible rather than quietly edited away: an earlier measurement
-this project published found 22% of the corpus (71,623 of 325,044 reports)
-never reached stack-hash dedup at all, falling back to raw label-equality
-grouping instead. Root-causing it found a single parser gap (a sanitizer
-crash-stack boundary the parser recognized for only 5 hardcoded bug-class
-phrases instead of the general case) — fixing it dropped that rate to
-**0.002% (7 reports)**. `autofte bench` still prints this count on every
-run (`No-hash fallbacks: 7`) so it stays auditable rather than assumed.
-Nothing on this page is asserted; it's run.
+`autofte bench` also prints a `No-hash fallbacks` count on every run (currently 7 of 325,044 reports — crashes that never reached stack-hash dedup at all) so that stays auditable too. Nothing on this page is asserted; it's run.
 
 ---
 
@@ -212,12 +123,12 @@ Nothing on this page is asserted; it's run.
 
 | | |
 |---|---|
-| 🎬 **Demo** | `autofte demo` — zero arguments. Builds the bundled multi-bug target (4 distinct, deliberately reachable bugs) if needed, triages 12 pre-seeded crashes into their real root causes, and prints a one-line verdict in well under a minute. Quiet by default; `--verbose` shows the full trace. |
-| 🧩 **Triage** | Groups crash files with major/minor stack-hash dedup — ASan/UBSan reports when the target is sanitizer-built, gdb backtraces otherwise, exit-signal grouping as the last resort. Real, distinct bugs, not hundreds of individual files. |
-| 🧪 **Sanitizer ingestion** | Parses real ASan/UBSan reports into a normalized record — bug class, read/write, access size, fault address, allocation/free stacks — the highest-signal input to both dedup and the LLM write-up. |
+| 🎬 **Demo** | `autofte demo` — zero arguments. Builds the bundled 4-bug target if needed, triages its 12 pre-seeded crashes, prints a one-line verdict in well under a minute. `--verbose` shows the full trace. |
+| 🧩 **Triage** | Groups crash files by major/minor stack-hash dedup — ASan/UBSan reports when the target is sanitizer-built, gdb backtraces otherwise, exit-signal grouping as a last resort. |
+| 🧪 **Sanitizer ingestion** | Parses ASan/UBSan reports into a normalized record — bug class, read/write, access size, fault address, alloc/free stacks — feeding both dedup and the LLM write-up. |
 | 🛡️ **Binscan** | Checks a binary for NX, PIE, RELRO, stack canaries, FORTIFY_SOURCE, and dangerous libc calls (`strcpy`, `gets`, ...). |
-| ⚖️ **Crash-aware severity** | Fuses the crash's fault signature with the mitigation posture into a difficulty label — always with an explicit confidence and rationale, never a bare verdict. |
-| 🤖 **LLM notes** *(optional)* | Asks a local Ollama model for a plain-language write-up, grounded in the real sanitizer record and severity assessment, not just summary stats. No hard-coded model — it auto-detects what you have installed. Skips cleanly if Ollama isn't running. |
+| ⚖️ **Crash-aware severity** | Fuses the crash's fault signature with the mitigation posture into a difficulty label, with an explicit confidence and rationale — never a bare verdict. |
+| 🤖 **LLM notes** *(optional)* | Local Ollama model writes a plain-language summary grounded in the real sanitizer record and severity assessment. Auto-detects an installed model; skips cleanly if Ollama isn't running. |
 | 📄 **Report + dashboard + SARIF** | A markdown run summary, a static HTML dashboard, and SARIF output (`--format sarif` / `--sarif <path>`) for code-scanning tools and CI. |
 | 🩺 **Doctor** | One command that tells you exactly which required/optional tools are missing on this machine. |
 
@@ -230,7 +141,7 @@ pipx install autofte
 autofte doctor
 ```
 
-`autofte` isn't on PyPI yet — the publish workflow (`.github/workflows/release.yml`) is wired up and will run the moment a `v0.x.0` tag is pushed, but that hasn't happened. The command above is documented as the primary install because it's what ships next, not because it works today.
+`autofte` isn't on PyPI yet — the publish workflow (`.github/workflows/release.yml`) is wired up and will run the moment a `v0.x.0` tag is pushed, but that hasn't happened. Use the source install below until then.
 
 **Works today — install from source:**
 
@@ -274,7 +185,7 @@ autofte doctor
 autofte demo
 ```
 
-No arguments needed. This is the command behind the ["look what it found"](#look-what-it-found) output above — it builds the bundled ASan-instrumented `examples/vuln-demo` target if it isn't built yet, triages the 12 crash files shipped in the repo (spread across 4 distinct bugs), runs `binscan`, attempts an LLM write-up, and ends on a verdict line. Add `--verbose` for the full step-by-step trace; artifacts land in `./autofte-demo-output/`, not your bare working directory.
+No arguments needed. This is the command behind the ["look what it found"](#look-what-it-found) output above — it builds the bundled ASan-instrumented `examples/vuln-demo` target if it isn't built yet, triages the 12 crash files shipped in the repo, runs `binscan`, attempts an LLM write-up, and ends on a verdict line. Add `--verbose` for the full step-by-step trace; artifacts land in `./autofte-demo-output/`, not your bare working directory.
 
 ### On your own crashes
 
@@ -364,10 +275,7 @@ export AUTOFTE_LLM_MODEL=qwen3-coder:30b
 
 `OLLAMA_HOST` (or `--host`) controls where AutoFTE looks for Ollama; defaults to `http://localhost:11434`.
 
-There's no timeout on the model call by default — a cold model load or CPU-only
-inference can legitimately take a long time, and a hard cap just turns "slow"
-into "silently skipped." Set `AUTOFTE_LLM_TIMEOUT` (or pass `--llm-timeout`,
-in seconds) if you'd rather it give up after a bound you choose.
+There's no timeout on the model call by default — a cold model load or CPU-only inference can legitimately take a while, and a hard cap just turns "slow" into "silently skipped." Set `AUTOFTE_LLM_TIMEOUT` (or pass `--llm-timeout`, in seconds) if you'd rather it give up after a bound you choose.
 
 ## Repo layout
 
@@ -400,7 +308,7 @@ pytest
 ruff check .
 ```
 
-491 tests: mocked subprocess calls for the tool-parsing logic, plus real end-to-end passes against compiled binaries (including real multi-compiler ASan builds), a real local Ollama call exercising the evidence-cited/schema-constrained LLM path, and `autofte bench` runs against a real, independently-downloaded 325,000-report ground-truth corpus (see [`benchmarks/results.md`](benchmarks/results.md) for the measured accuracy numbers). [`scripts/smoke-test.sh`](scripts/smoke-test.sh) is a separate, manually-run end-to-end check against the real CLI (doctor, demo, triage, binscan, crash-info, bench, pipeline, dashboard) rather than the mocked unit-test boundaries — see [CONTRIBUTING.md](CONTRIBUTING.md#before-opening-a-pr) for when to run it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the commit convention and how to add a new binscan check.
+491 tests: mocked subprocess calls for the tool-parsing logic, plus real end-to-end passes against compiled binaries (including real multi-compiler ASan builds), a real local Ollama call exercising the evidence-cited/schema-constrained LLM path, and `autofte bench` runs against a real, independently-downloaded 325,000-report ground-truth corpus (see [`benchmarks/results.md`](benchmarks/results.md) for the measured accuracy numbers). [`scripts/smoke-test.sh`](scripts/smoke-test.sh) is a separate, manually-run end-to-end check against the real CLI — see [CONTRIBUTING.md](CONTRIBUTING.md#before-opening-a-pr) for when to run it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the commit convention and how to add a new binscan check.
 
 ## Roadmap
 
