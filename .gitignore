@@ -1,4 +1,10 @@
 out/
+# Intermediate build artifacts for the README's demo GIF (see
+# CONTRIBUTING.md "Recording the README demo assets"). Only the final
+# stitched autofte-demo-combined.gif is checked in.
+/autofte-demo.cast
+/autofte-demo.gif
+/autofte-dashboard.png
 examples/*/target
 examples/*/target_asan
 examples/*/core
