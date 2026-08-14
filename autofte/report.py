@@ -16,7 +16,7 @@ CLI plumbing is needed to keep this report honest and self-contained.
 
 from datetime import datetime
 
-from . import severity
+from . import crash_display, severity
 
 _PROTECTION_LABELS = (
     ("aslr_system", "ASLR"),
@@ -26,30 +26,6 @@ _PROTECTION_LABELS = (
 )
 
 MAX_GROUPS_SHOWN = 5
-
-
-def _representative_crash_record(group_data):
-    for crash in group_data.get("crashes", []):
-        record = crash.get("sanitizer")
-        if record:
-            return record
-    return None
-
-
-def _bug_class_label(crash_record):
-    if not crash_record:
-        return None
-    bug_class = crash_record.get("bug_class") or "unknown"
-    details = []
-    access_type = crash_record.get("access_type")
-    access_size = crash_record.get("access_size")
-    if access_type:
-        details.append(access_type)
-    if access_size is not None:
-        details.append(f"{access_size} bytes")
-    if details:
-        return f"{bug_class} ({', '.join(details)})"
-    return bug_class
 
 
 def build_report(target_binary, source_file, triage, binary_data, llm_data):
@@ -80,12 +56,12 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data):
         for index, (frame, data) in enumerate(list(groups.items())[:MAX_GROUPS_SHOWN], start=1):
             sample = data.get("crashes", [{}])[0]
             count = data.get("count", 0)
-            crash_record = _representative_crash_record(data)
-            bug_class_label = _bug_class_label(crash_record)
-            heading = bug_class_label or frame
+            crash_record = crash_display.representative_crash_record(data)
+            label = crash_display.bug_class_label(crash_record)
+            heading = label or frame
 
             lines.append(f"### {index}. {heading} -- {count} crashes")
-            if bug_class_label and bug_class_label != frame:
+            if label and label != frame:
                 lines.append(f"- Signature: `{frame}`")
             lines.append(f"- Sample crash file: `{sample.get('file', 'n/a')}`")
 

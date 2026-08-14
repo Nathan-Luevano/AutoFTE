@@ -42,7 +42,6 @@ import tempfile
 from pathlib import Path
 
 from . import dedup, sanitizers
-from .paths import pick_crash_dir  # noqa: F401  (re-exported for callers/tests)
 
 GDB_TIMEOUT_SECONDS = 10
 DIRECT_RUN_TIMEOUT_SECONDS = 10

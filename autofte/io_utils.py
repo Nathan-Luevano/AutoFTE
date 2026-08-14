@@ -13,5 +13,5 @@ def load_json(path):
 
 
 def write_json(path, data):
-    with open(path, "w", encoding="utf-8") as handle:
+    with Path(path).open("w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)
