@@ -29,7 +29,7 @@ quality/sub-bucket disambiguation, just not for these accuracy metrics.
 | 8 | 0.8995 | 0.5988 | 0.6612 | 230 | 0.2203 |
 
 (Full 89-point grid, including every `minor` value per `major`, is in
-`bench-sweep-results.json`, checked in for reproducibility — confirms the
+`sweep-results.json`, checked in for reproducibility — confirms the
 "constant across minor" observation above holds for every single point,
 not just the ones summarized here.)
 

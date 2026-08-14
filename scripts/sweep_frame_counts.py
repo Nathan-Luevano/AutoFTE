@@ -19,7 +19,7 @@ under a minute after the corpus is parsed.
 
 Bucket ids are namespaced by target for the igor corpus kind, identical to
 `bench.run_bench`. Results are scored with `metrics.compute_metrics` and
-written to `bench-sweep-results.json` (summary stats only -- the full
+written to `benchmarks/sweep-results.json` (summary stats only -- the full
 per-label/per-bucket breakdown is not needed for the sweep and would bloat
 the file across ~90 grid points).
 
@@ -37,7 +37,7 @@ from autofte import bench, dedup  # noqa: E402
 from autofte.metrics import compute_metrics  # noqa: E402
 from autofte.sanitizers import parse_sanitizer_output  # noqa: E402
 
-RESULTS_PATH = Path(__file__).resolve().parent.parent / "bench-sweep-results.json"
+RESULTS_PATH = Path(__file__).resolve().parent.parent / "benchmarks" / "sweep-results.json"
 MAJOR_RANGE = range(1, 9)
 MINOR_RANGE = range(3, 16)
 

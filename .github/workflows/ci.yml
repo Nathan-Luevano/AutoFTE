@@ -37,7 +37,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Lint with ruff
-        run: ruff check autofte tests
+        run: ruff check autofte tests scripts
 
       - name: Run tests with coverage
         run: pytest -q --cov=autofte --cov-report=term-missing
@@ -57,11 +57,11 @@ jobs:
       - name: Install the package
         run: pip install -e .
 
-      - name: Run micro-corpus bench and gate on regression vs bench-baseline.json
+      - name: Run micro-corpus bench and gate on regression vs benchmarks/baseline.json
         shell: bash
         run: |
           set -uo pipefail
-          autofte bench --corpus micro --baseline bench-baseline.json \
+          autofte bench --corpus micro --baseline benchmarks/baseline.json \
             --json bench-results.json | tee bench-output.txt
           status=${PIPESTATUS[0]}
           {
