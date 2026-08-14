@@ -13,7 +13,7 @@ recomputed here directly from `triage`/`binary_data`, the same way
 
 import html
 
-from . import severity
+from . import crash_display, severity
 
 MAX_GROUPS_SHOWN = 8
 
@@ -25,38 +25,14 @@ def _render_list(items):
     return f"<ul>{rows}</ul>"
 
 
-def _representative_crash_record(group_data):
-    for crash in group_data.get("crashes", []):
-        record = crash.get("sanitizer")
-        if record:
-            return record
-    return None
-
-
-def _bug_class_label(crash_record):
-    if not crash_record:
-        return None
-    bug_class = crash_record.get("bug_class") or "unknown"
-    details = []
-    access_type = crash_record.get("access_type")
-    access_size = crash_record.get("access_size")
-    if access_type:
-        details.append(access_type)
-    if access_size is not None:
-        details.append(f"{access_size} bytes")
-    if details:
-        return f"{bug_class} ({', '.join(details)})"
-    return bug_class
-
-
 def _group_row(frame, data, binary_data):
     sample = data.get("crashes", [{}])[0]
-    crash_record = _representative_crash_record(data)
-    bug_class_label = _bug_class_label(crash_record)
+    crash_record = crash_display.representative_crash_record(data)
+    label = crash_display.bug_class_label(crash_record)
 
-    if bug_class_label and bug_class_label != frame:
+    if label and label != frame:
         signature_html = (
-            f"<strong>{html.escape(bug_class_label)}</strong>"
+            f"<strong>{html.escape(label)}</strong>"
             f"<br><span class=\"muted\">{html.escape(frame)}</span>"
         )
     else:

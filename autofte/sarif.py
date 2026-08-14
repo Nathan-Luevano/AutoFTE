@@ -60,7 +60,7 @@ import json
 import re
 from importlib.metadata import PackageNotFoundError, metadata, version
 
-from . import dedup, severity
+from . import crash_display, dedup, severity
 
 SCHEMA_URI = (
     "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
@@ -97,29 +97,11 @@ def _information_uri():
     return FALLBACK_INFORMATION_URI
 
 
-def _representative_crash_record(group_data):
-    for crash in group_data.get("crashes", []):
-        record = crash.get("sanitizer")
-        if record:
-            return record
-    return None
-
-
 def _bug_class_heading(label, crash_record):
-    if not crash_record:
-        return label
-
-    bug_class = crash_record.get("bug_class") or "unknown"
-    details = []
-    access_type = crash_record.get("access_type")
-    access_size = crash_record.get("access_size")
-    if access_type:
-        details.append(access_type)
-    if access_size is not None:
-        details.append(f"{access_size} bytes")
-    if details:
-        return f"{bug_class} ({', '.join(details)})"
-    return bug_class
+    """Like `crash_display.bug_class_label`, but falls back to the group's
+    raw `label` instead of `None` when there's no sanitizer record -- SARIF
+    rule/result headings always need *some* identifying string."""
+    return crash_display.bug_class_label(crash_record) or label
 
 
 def _rule_id(label, crash_record):
@@ -188,7 +170,7 @@ def build_sarif(triage, binary_data, llm_data=None, target_binary=None):
     rules_by_id = {}
 
     for label, group_data in groups.items():
-        crash_record = _representative_crash_record(group_data)
+        crash_record = crash_display.representative_crash_record(group_data)
         heading = _bug_class_heading(label, crash_record)
         rule_id = _rule_id(label, crash_record)
         assessment = severity.assess_crash_difficulty(binary_data, crash_record)
