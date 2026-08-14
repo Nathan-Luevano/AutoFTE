@@ -155,7 +155,8 @@ def cmd_llm(args):
         print(f"Error: {exc}")
         return 1
 
-    client = OllamaClient(model=model, host=host)
+    timeout = config.resolve_timeout(getattr(args, "llm_timeout", None))
+    client = OllamaClient(model=model, host=host, timeout=timeout)
     ok, message = client.check()
     if not ok:
         print(message)
@@ -363,6 +364,7 @@ def cmd_pipeline(args):
             output=args.llm_analysis,
             model=args.model,
             host=args.host,
+            llm_timeout=getattr(args, "llm_timeout", None),
             quiet=args.quiet,
         )
         if cmd_llm(llm_ns) != 0:
@@ -596,6 +598,7 @@ def cmd_demo(args):
         debugger="gdb",
         model=args.model,
         host=args.host,
+        llm_timeout=getattr(args, "llm_timeout", None),
         skip_llm=False,
         quiet=not verbose,
         triage_json=triage_json,
@@ -665,6 +668,14 @@ def build_parser():
     p_llm.add_argument("--output", default="llm_analysis.json")
     p_llm.add_argument("--model", help="Ollama model name (default: auto-detect)")
     p_llm.add_argument("--host", help="Ollama host (default: $OLLAMA_HOST or http://localhost:11434)")
+    p_llm.add_argument(
+        "--llm-timeout",
+        type=float,
+        help=(
+            "Seconds to wait for the model to answer (default: $AUTOFTE_LLM_TIMEOUT, "
+            "or no timeout -- slow/cold-loading local models are expected)"
+        ),
+    )
     p_llm.set_defaults(func=cmd_llm)
 
     p_report = subparsers.add_parser(
@@ -742,6 +753,14 @@ def build_parser():
     p_pipeline.add_argument("--model", help="Ollama model name (default: auto-detect)")
     p_pipeline.add_argument("--host", help="Ollama host")
     p_pipeline.add_argument(
+        "--llm-timeout",
+        type=float,
+        help=(
+            "Seconds to wait for the model to answer (default: $AUTOFTE_LLM_TIMEOUT, "
+            "or no timeout -- slow/cold-loading local models are expected)"
+        ),
+    )
+    p_pipeline.add_argument(
         "--skip-llm", action="store_true", help="Skip the LLM write-up step entirely"
     )
     p_pipeline.add_argument("--quiet", action="store_true")
@@ -765,6 +784,14 @@ def build_parser():
     )
     p_demo.add_argument("--model", help="Ollama model name (default: auto-detect)")
     p_demo.add_argument("--host", help="Ollama host (default: $OLLAMA_HOST or http://localhost:11434)")
+    p_demo.add_argument(
+        "--llm-timeout",
+        type=float,
+        help=(
+            "Seconds to wait for the model to answer (default: $AUTOFTE_LLM_TIMEOUT, "
+            "or no timeout -- slow/cold-loading local models are expected)"
+        ),
+    )
     p_demo.add_argument(
         "--verbose",
         action="store_true",

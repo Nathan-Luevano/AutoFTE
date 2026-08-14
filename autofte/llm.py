@@ -102,19 +102,39 @@ RESPONSE_SCHEMA = {
     "properties": {
         "reasoning": {
             "type": "string",
+            # Ollama 0.20.2's schema-constrained decoder hard-fails --
+            # `500 {"error":"failed to load model vocabulary required for
+            # format"}` -- for ANY string maxLength >= 2048, reproducibly
+            # across every model this project has installed (confirmed by
+            # binary search: 2000 -> 200 OK, 2048 -> 500, on gpt-oss:20b,
+            # glm-4.7-flash, and gemma4:26b alike). This is model-agnostic --
+            # a limitation of this Ollama version's grammar/vocab compiler,
+            # not of any one model -- so keep every maxLength in this schema
+            # comfortably under that threshold. Do not raise this back
+            # toward 2048 without re-checking that ceiling still holds.
+            "maxLength": 1800,
             "description": (
                 "Think here first, before any other field. Begin by restating, by ID, the "
                 "exact evidence lines you are relying on."
             ),
         },
-        "summary": {"type": "string", "description": "2-3 sentence plain-language summary."},
+        "summary": {
+            "type": "string",
+            "maxLength": 600,
+            "description": "2-3 sentence plain-language summary.",
+        },
         "summary_evidence": _evidence_id_array(),
         "likely_bug_type": {
             "type": "string",
+            "maxLength": 100,
             "description": "Short label, or 'unknown' if the evidence does not support one.",
         },
         "likely_bug_type_evidence": _evidence_id_array(),
-        "root_cause": {"type": "string", "description": "Why this is probably happening."},
+        "root_cause": {
+            "type": "string",
+            "maxLength": 1200,
+            "description": "Why this is probably happening.",
+        },
         "root_cause_evidence": _evidence_id_array(),
         "exploitability_class": {
             "type": "string",
@@ -314,13 +334,37 @@ class LLMResponseError(RuntimeError):
     """Raised when the model didn't return something we could parse and trust."""
 
 
+# Sentinel distinguishing "caller didn't pass timeout" (use self.timeout)
+# from "caller explicitly passed timeout=None" (no timeout, on purpose).
+_UNSET = object()
+
+# `num_predict` on Ollama's `/api/generate` is ONE shared token budget --
+# for hybrid-reasoning models (qwen3.x, glm-4.7-flash, gpt-oss, and others)
+# it pays for the entire hidden `thinking` phase *and* the final answer.
+# 1200 was sized for the answer alone; against real models it was
+# routinely exhausted mid-thought, so `done_reason` came back "length"
+# and `response` shipped empty -- "model response was empty" was a
+# starved budget, not a broken model. Confirmed empirically (research/06
+# follow-up) against every thinking-capable model this project has
+# installed. Generous by design: unused budget costs nothing but a
+# slightly higher worst-case latency, which is a fine trade against a
+# guaranteed-empty response.
+DEFAULT_MAX_TOKENS = 8192
+
+
 class OllamaClient:
-    def __init__(self, model, host=DEFAULT_HOST):
+    def __init__(self, model, host=DEFAULT_HOST, timeout=None):
         if not model:
             raise ValueError("OllamaClient requires a model name")
         self.model = model
         self.host = host.rstrip("/")
         self.session = requests.Session()
+        # `None` means "wait as long as it takes" -- there's no good
+        # universal default here. A cold model load or CPU-only inference
+        # can legitimately take far longer than a typical GPU box, and a
+        # hard cap just turns "slow" into "silently skipped". See
+        # config.resolve_timeout() for how callers pick this.
+        self.timeout = timeout
 
     def check(self):
         try:
@@ -335,7 +379,9 @@ class OllamaClient:
 
         return True, "ok"
 
-    def ask(self, prompt, max_tokens=1200, timeout=90, schema=None, temperature=None):
+    def ask(
+        self, prompt, max_tokens=DEFAULT_MAX_TOKENS, timeout=_UNSET, schema=None, temperature=None
+    ):
         """POST a prompt to `/api/generate`. When `schema` is given, it is
         passed as Ollama's `format` parameter for grammar-constrained
         decoding. If `temperature` was left at its default (`None`), the
@@ -345,7 +391,18 @@ class OllamaClient:
         constrained decoding guarantees JSON *shape*, not determinism, and
         self-consistency sampling (research/06 §3.2) needs schema-
         constrained, temperature>0 samples at the same time.
+
+        `timeout` defaults to the client's own `self.timeout` (see
+        `OllamaClient.__init__`); pass it explicitly here to override that
+        for a single call, including `None` for "no timeout".
+
+        `max_tokens` defaults to `DEFAULT_MAX_TOKENS`, sized to cover a
+        full hidden `thinking` phase plus the final answer (see that
+        constant's comment) -- override it only if you know the model in
+        play has no reasoning phase and want a tighter budget.
         """
+        if timeout is _UNSET:
+            timeout = self.timeout
         options = {
             "num_predict": max_tokens,
             "temperature": 0.1 if temperature is None else temperature,
@@ -362,9 +419,48 @@ class OllamaClient:
             if temperature is None:
                 payload["options"]["temperature"] = 0.0
 
-        response = self.session.post(f"{self.host}/api/generate", json=payload, timeout=timeout)
-        response.raise_for_status()
-        return response.json().get("response", "").strip()
+        try:
+            response = self.session.post(
+                f"{self.host}/api/generate", json=payload, timeout=timeout
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            # `check()` only proves Ollama is reachable, not that it will
+            # answer within `timeout` (e.g. a cold model load can pass the
+            # preflight and still time out here). Surface this as the same
+            # `LLMResponseError` callers already handle instead of letting
+            # a raw `requests` exception crash the whole CLI.
+            raise LLMResponseError(f"Ollama request failed: {exc}") from exc
+
+        data = response.json()
+        text = (data.get("response") or "").strip()
+        if not text:
+            thinking = (data.get("thinking") or "").strip()
+            if thinking and data.get("done_reason") == "length":
+                # Hybrid-reasoning models (see DEFAULT_MAX_TOKENS above) put
+                # their chain-of-thought in a separate `thinking` field.
+                # Getting here with done_reason "length" means the model
+                # was still inside that phase when `num_predict` ran out --
+                # there's no telling whether `thinking` holds a finished
+                # answer, so fail loudly instead of guessing.
+                raise LLMResponseError(
+                    "model exhausted its token budget "
+                    f"(max_tokens={max_tokens}) inside its internal "
+                    "`thinking` phase and never produced a response -- "
+                    "raise max_tokens"
+                )
+            if thinking:
+                # Confirmed empirically (research/06 follow-up) against
+                # glm-4.7-flash and qwen3.5: these models can finish
+                # generation cleanly -- done_reason "stop", well under
+                # the token budget -- while writing their entire answer
+                # into `thinking` and leaving `response` empty. Ollama
+                # never promised `response` is where the answer ends up
+                # for hybrid-reasoning models; treat `thinking` as the
+                # candidate answer and let extract_json() try to parse
+                # it, same as it would `response`.
+                return thinking
+        return text
 
 
 class EvidenceLedger:

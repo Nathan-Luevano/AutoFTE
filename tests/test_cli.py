@@ -274,9 +274,10 @@ def test_cmd_binscan_end_to_end(tmp_path, monkeypatch, capsys):
 
 
 class _FakeLLMClient:
-    def __init__(self, model, host):
+    def __init__(self, model, host, timeout=None):
         self.model = model
         self.host = host
+        self.timeout = timeout
 
     def check(self):
         return True, "ok"
@@ -391,7 +392,7 @@ def test_cmd_llm_client_check_failure(tmp_path, monkeypatch, capsys):
     _write_json(tmp_path / "triage.json", {"groups": {}})
 
     class UnreachableClient:
-        def __init__(self, model, host):
+        def __init__(self, model, host, timeout=None):
             pass
 
         def check(self):
