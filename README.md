@@ -29,7 +29,7 @@ You fuzzed something and now you have a directory full of crash files. AutoFTE g
 pipx install autofte
 ```
 
-> This is the headline install and it's what's live the moment a release is tagged — but no release has shipped yet, so `pipx install autofte` doesn't resolve on PyPI today. Until then, use the dev install in [Install](#install), which works right now.
+Published releases are available on [PyPI](https://pypi.org/project/autofte/). The source install remains available for development; see [Install](#install).
 
 ### Look what it found
 
@@ -134,16 +134,16 @@ The aggregate hides real per-target spread, so it isn't the only number publishe
 
 ## Install
 
-**Headline install (once a release is tagged):**
+**Install from PyPI:**
 
 ```bash
 pipx install autofte
 autofte doctor
 ```
 
-`autofte` isn't on PyPI yet — the publish workflow (`.github/workflows/release.yml`) is wired up and will run the moment a `v0.x.0` tag is pushed, but that hasn't happened. Use the source install below until then.
+The current release is [`autofte 0.2.1`](https://pypi.org/project/autofte/0.2.1/). Releases are built and published from `.github/workflows/release.yml` using PyPI trusted publishing.
 
-**Works today — install from source:**
+**Install from source for development:**
 
 ```bash
 git clone https://github.com/Nathan-Luevano/AutoFTE.git
@@ -167,7 +167,7 @@ docker build -t autofte .
 docker run --rm autofte demo
 ```
 
-**Single-file binary:** a PyInstaller build (`pyinstaller.spec`) is wired into the release workflow and will be attached to every GitHub Release once one exists, for machines with no Python at all. Not available yet — same "wired up, not shipped" status as PyPI.
+**Single-file binary:** Linux x86-64 builds are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases). The [`v0.2.1` release](https://github.com/Nathan-Luevano/AutoFTE/releases/tag/v0.2.1) includes `autofte-linux-x86_64` for machines with no Python installation.
 
 Then, whichever install you used, check what your machine actually has available:
 
@@ -315,7 +315,7 @@ ruff check .
 - Disassembly around the faulting instruction, fed into the LLM prompt (the prompt already accepts it — `llm.build_prompt`'s `disassembly` param — nothing produces it yet)
 - Support fuzzer backends beyond AFL++ (libFuzzer, honggfuzz)
 - macOS support (depends on gdb/binutils availability there)
-- Distro packaging (BlackArch, Kali) once PyPI + binary releases exist
+- Distro packaging (BlackArch, Kali)
 
 ## Notes
 
