@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autofte"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local-first crash triage, binary mitigation analysis, and LLM-assisted write-ups for fuzzing runs"
-readme = "README.md"
+readme = "PYPI.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 authors = [{ name = "Nathan Luevano" }]
