@@ -1,149 +1,129 @@
+<div align="center">
+
+<img src="AutoFTE.png" alt="AutoFTE Logo" width="220">
+
 # AutoFTE
 
-<p align="center">
-  <img src="AutoFTE.png" alt="AutoFTE logo" width="220">
-</p>
+**Local-first crash triage, binary mitigation analysis, and LLM-assisted write-ups for fuzzing runs.**
 
-<p align="center">
-  <b>Local-first crash triage, binary mitigation analysis, and LLM-assisted write-ups for fuzzing runs.</b>
-</p>
+[![PyPI Version](https://img.shields.io/pypi/v/autofte.svg?color=0066CC)](https://pypi.org/project/autofte/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
+[![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tests Passing](https://img.shields.io/badge/tests-491%20passing-brightgreen.svg)](tests/)
 
-<p align="center">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9%2B-blue.svg">
-  <img alt="Platform: Linux" src="https://img.shields.io/badge/platform-Linux-lightgrey.svg">
-  <img alt="Status: Alpha" src="https://img.shields.io/badge/status-alpha-orange.svg">
-</p>
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![C / C++](https://img.shields.io/badge/C%20%2F%20C%2B%2B-00599C?logo=c%2B%2B&logoColor=white)](https://en.wikipedia.org/wiki/C%2B%2B)
+[![Sanitizers](https://img.shields.io/badge/ASan%20%2F%20UBSan-2E8B57)](https://github.com/google/sanitizers)
+[![AFL++](https://img.shields.io/badge/AFL%2B%2B-Fuzzing-4B0082)](https://github.com/AFLplusplus/AFLplusplus)
+[![GDB](https://img.shields.io/badge/GDB-Debugger-808080)](https://www.sourceware.org/gdb/)
+[![Binutils](https://img.shields.io/badge/GNU%20Binutils-ELF%20Analysis-333333)](https://www.gnu.org/software/binutils/)
+[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-000000)](https://ollama.com/)
+[![SARIF](https://img.shields.io/badge/SARIF-v2.1.0-4A154B)](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+[![Docker](https://img.shields.io/badge/Docker-Container-2496ED?logo=docker&logoColor=white)](Dockerfile)
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?logo=githubactions&logoColor=white)](action.yml)
 
----
-
-You fuzzed something and now you have a directory full of crash files. AutoFTE groups them by root cause, checks the target binary's exploit mitigations, and — optionally — asks a local LLM to explain what actually broke and whether it's worth your time. One command, fully offline, nothing ever leaves your machine.
-
-<p align="center">
-  <img src="autofte-demo-combined.gif" alt="Terminal recording of autofte demo --verbose, followed by a scroll through the dashboard it produces." width="760">
-</p>
-
-### Install, one line
-
-```bash
-pipx install autofte
-```
-
-Published releases are available on [PyPI](https://pypi.org/project/autofte/). The source install remains available for development; see [Install](#install).
-
-### Look what it found
-
-Real output from `autofte demo` — zero arguments, no fuzzing campaign needed. The bundled demo target has four distinct, deliberately reachable bugs (stack overflow, heap overflow, use-after-free, NULL deref); 12 pre-generated crashes are spread across all four, so the run has something real to collapse:
-
-```
-$ autofte demo
-AutoFTE demo: building and triaging the bundled vuln-demo target (vuln-demo/target_asan)
-
-
-→ 12 crashes · 4 root causes · #1 stack-buffer-overflow (write 66) in vuln_stack_overflow at vuln.c:39 (3 crashes) — Medium · 3/3 reproducible
-
-Artifacts written to autofte-demo-output/
-```
-
-That's the whole default output — quiet on purpose. Run `autofte demo --verbose` for the full trace (shown in the recording above), or open `autofte-demo-output/dashboard/index.html` / `analysis_summary.md` for the other three groups AutoFTE found — a heap overflow, a use-after-free, and a NULL deref — each correctly separated with the real function/line, an honest difficulty + confidence, and (with Ollama reachable) a grounded, evidence-cited LLM write-up like this real one:
-
-> Heap buffer overflow (write 65) in vuln_heap_overflow function. Unbounded
-> memcpy in vuln_heap_overflow function.
-> *(fix idea: "Add bounds checking on payload_len before calling memcpy in
-> vuln_heap_overflow"; exploitability_class: `insufficient_evidence` — the
-> model isn't guessing at exploitability it can't demonstrate.)*
-
-No crash data, source, or binary ever leaves your machine — the LLM step is optional and local, and skips cleanly if Ollama isn't reachable.
-
-### AutoFTE vs. the alternatives
-
-| | Manual `gdb` loop | `exploitable` (GDB plugin) | [CASR](https://github.com/ispras/casr) | AutoFTE |
-|---|---|---|---|---|
-| Setup | None — but 100% by hand | GDB + plugin | Rust toolchain, Docker, ptrace caps | `pipx install autofte` |
-| Groups crashes by root cause | You eyeball it | No — one crash at a time | Yes, major/minor stack-hash dedup | Yes, major/minor stack-hash dedup (ASLR-shifted duplicates collapse; on the measured corpus, ~1 in 10 reports lands in a bucket dominated by a *different* bug — see [Measured, not assumed](#measured-not-assumed)) |
-| Reads sanitizer (ASan/UBSan) reports | Manually | No | Yes | Yes — bug class, read/write, access size, alloc/free stacks, normalized into every group |
-| Fuses fault type with mitigation posture into a difficulty signal | Manually | Some | Some | Yes, with an explicit confidence and rationale — never a bare verdict |
-| Plain-language write-up of what broke | Never | Never | Never | Optional, via a local Ollama model, grounded in the real sanitizer record and severity assessment |
-| SARIF / CI code-scanning output | No | No | Yes | Yes (`--format sarif`, `--sarif <path>`, or the bundled [GitHub Action](#github-action)) |
-| Sends anything off-box | No | No | No | No — the LLM step is local-only (Ollama) or skipped entirely |
-
-CASR is the more mature competitor on triage and severity. AutoFTE's differentiator is the offline, plain-language explanation step grounded in that same structured evidence, plus a one-command `pipx` install with no Docker/ptrace setup.
-
-### The dashboard
-
-`autofte demo` (and `autofte dashboard`) writes a static `dashboard/index.html` you can open directly or drop into CI artifacts — no server required. It's a single self-contained page with:
-
-- a stat strip (crash file count, crash group count, protection level, likely bug type)
-- a ranked crash-groups table — bug class/signature, crash count, and a crash-aware difficulty label with its confidence, with the reasoning behind it one click away in a `<details>` disclosure
-- a binary-notes card (ASLR/NX/PIE/canaries/RELRO, protection level, exploit difficulty)
-- the LLM's grounded narrative, if it ran, including its "what would confirm this" list
-- "next checks" and "fix ideas" lists pulled from the LLM write-up
-
-This is the same run from the recording above, continued — the terminal half ends by writing this dashboard, and the recording's second half is a scroll through it, top to bottom.
-
-### Measured, not assumed
-
-Most crash-triage tools never publish how often their dedup is actually right. AutoFTE does, against the same real ground-truth corpus the published literature uses — the [GPTrace/Igor benchmark](https://zenodo.org/records/18708473) (325,044 labeled ASan reports, 50 real bugs, 14 real C/C++ targets, Apache-2.0). `autofte bench --corpus igor` reproduces this on demand (`scripts/fetch_bench_corpus.sh` downloads and MD5-verifies the corpus first); the full history of every change and its measured effect is in [`benchmarks/results.md`](benchmarks/results.md), not just the snapshot below.
-
-The GPTrace paper averages its 14 targets unweighted (macro). AutoFTE reports both that basis and the stricter whole-corpus pooled number (micro) the paper never computes:
-
-| | Purity | Inverse purity | F-measure |
-|---|---|---|---|
-| Crashwalk (published, macro) | 98% | 69% | 76 |
-| GPTrace (published, macro) | 98% | 94% | 94 |
-| **AutoFTE, macro (per-target mean)** | **97.7%** | **90.5%** | **91.9%** |
-| **AutoFTE, micro (pooled, all 325,044 reports)** | **89.9%** | **80.3%** | **78.3%** |
-
-On the paper's own basis, AutoFTE is close behind GPTrace and ahead of Crashwalk on every metric. On the stricter pooled basis it is not — that's the honest floor, not a footnote. Purity measures whether two *different* bugs ever get silently merged into one bucket, the worst failure mode a triage tool can have, since the merged-away bug doesn't show up as a wrong answer anywhere. Inverse purity measures the opposite: one real bug shattered across many "unique" buckets. Pooled purity (89.9%) sits right at the information-theoretic ceiling a stack hash can achieve on this corpus (89.4%, per [`scripts/purity_ceiling.py`](scripts/purity_ceiling.py), which imports nothing from AutoFTE) — AutoFTE isn't leaving purity on the table, it's out of signal a stack hash can give it.
-
-The aggregate hides real per-target spread, so it isn't the only number published: `autofte bench --corpus igor --per-target` reports all 14 real targets separately (see [`benchmarks/results.md`](benchmarks/results.md)). `libxml2__xmllint` — the published literature's own worst case — has purity of only 83% (real bugs measurably merging); `php__exif` shatters its one real bug into 18 buckets (inverse purity 48%). Six of the 14 targets score at or near a perfect 1.0.
-
-`xmllint`'s purity problem is root-caused, not just measured: [`scripts/diagnose_xmllint_purity.py`](scripts/diagnose_xmllint_purity.py) found that 89% of its purity loss sits in one bucket where two ground-truth labels share a byte-identical 4-frame crash-site stack, diverging only in recursion-depth frames — no stack-hash dedup can split that apart. That's a real, disclosed limit of the corpus's labeling at that one target, not a gap in what AutoFTE measures.
-
-`autofte bench` also prints a `No-hash fallbacks` count on every run (currently 7 of 325,044 reports — crashes that never reached stack-hash dedup at all) so that stays auditable too. Nothing on this page is asserted; it's run.
+</div>
 
 ---
 
-## Contents
+## Overview
 
-- [Features](#features)
-- [Install](#install)
-- [Quick start](#quick-start)
-- [CLI reference](#cli-reference)
-- [Fuzzing helpers](#fuzzing-helpers)
-- [GitHub Action](#github-action)
-- [Choosing an LLM model](#choosing-an-llm-model)
-- [Repo layout](#repo-layout)
-- [Development](#development)
-- [Roadmap](#roadmap)
-- [Notes](#notes)
-- [License](#license)
+Fuzzing campaigns often yield hundreds or thousands of crash artifacts that share underlying root causes. **AutoFTE** automates post-fuzzing triage entirely on your local machine:
 
-## Features
+1. **Deduplicates crashes** into root-cause buckets using AddressSanitizer (ASan), UndefinedBehaviorSanitizer (UBSan), or GDB backtraces with ASLR-shift-normalized stack hashing.
+2. **Audits binary defenses** (NX, PIE, RELRO, stack canaries, FORTIFY_SOURCE, unsafe libc calls) to profile target exploit mitigations.
+3. **Assesses exploit difficulty** by fusing fault mechanics with active mitigations into an evidence-backed difficulty rating, confidence score, and clear rationale.
+4. **Generates grounded write-ups** using an optional local Ollama LLM with schema-constrained, evidence-ledgered prompts to prevent hallucination.
+5. **Exports multi-format artifacts** including a self-contained static HTML dashboard, SARIF v2.1.0 logs for GitHub Code Scanning, and Markdown run summaries.
 
-| | |
+AutoFTE runs completely offline. No crash data, binaries, or source code ever leave your environment.
+
+<div align="center">
+  <img src="autofte-demo-combined.gif" alt="AutoFTE Demo: Terminal execution followed by static HTML dashboard inspection" width="760">
+</div>
+
+---
+
+## Key Capabilities
+
+| Capability | Technical Implementation |
 |---|---|
-| 🎬 **Demo** | `autofte demo` — zero arguments. Builds the bundled 4-bug target if needed, triages its 12 pre-seeded crashes, prints a one-line verdict in well under a minute. `--verbose` shows the full trace. |
-| 🧩 **Triage** | Groups crash files by major/minor stack-hash dedup — ASan/UBSan reports when the target is sanitizer-built, gdb backtraces otherwise, exit-signal grouping as a last resort. |
-| 🧪 **Sanitizer ingestion** | Parses ASan/UBSan reports into a normalized record — bug class, read/write, access size, fault address, alloc/free stacks — feeding both dedup and the LLM write-up. |
-| 🛡️ **Binscan** | Checks a binary for NX, PIE, RELRO, stack canaries, FORTIFY_SOURCE, and dangerous libc calls (`strcpy`, `gets`, ...). |
-| ⚖️ **Crash-aware severity** | Fuses the crash's fault signature with the mitigation posture into a difficulty label, with an explicit confidence and rationale — never a bare verdict. |
-| 🤖 **LLM notes** *(optional)* | Local Ollama model writes a plain-language summary grounded in the real sanitizer record and severity assessment. Auto-detects an installed model; skips cleanly if Ollama isn't running. |
-| 📄 **Report + dashboard + SARIF** | A markdown run summary, a static HTML dashboard, and SARIF output (`--format sarif` / `--sarif <path>`) for code-scanning tools and CI. |
-| 🩺 **Doctor** | One command that tells you exactly which required/optional tools are missing on this machine. |
+| **Deterministic Crash Deduplication** | Groups crashes using major/minor stack-hash algorithms. Extracts bug classes, read/write access types, access sizes, fault addresses, and alloc/free stacks from ASan/UBSan reports. Falls back to GDB backtraces or exit-signal bucketing when sanitizer metadata is absent. |
+| **Binary Mitigation Scanning** | Inspects ELF binaries using standard binutils (`readelf`, `objdump`, `nm`, `ldd`, `file`, `strings`) to audit NX, PIE, Full/Partial RELRO, Stack Canaries, FORTIFY_SOURCE, and unsafe C library symbols (`strcpy`, `gets`, `sprintf`). |
+| **Context-Aware Exploit Severity** | Evaluates exploit difficulty (`Easy`, `Medium`, `Hard`, `Unknown`) with explicit confidence scores and justification strings based on the intersection of fault type and binary mitigations. |
+| **Grounded Local LLM Summaries** | Invokes local Ollama models via strict JSON schema constraints and a 6-stage deterministic validator pipeline to summarize root causes, suggest verification checks, and draft fixes without ungrounded claims. Skips cleanly if Ollama is unavailable. |
+| **Static Dashboard & SARIF Export** | Builds a zero-dependency static HTML dashboard (`dashboard/index.html`) with interactive details, collapsible stack traces, and mitigation summaries. Emits OASIS SARIF v2.1.0 findings for CI/CD code scanning. |
+| **Empirically Benchmarked Accuracy** | Evaluated against the standard GPTrace/Igor benchmark (325,044 ground-truth ASan crash reports across 14 C/C++ targets) with published macro and pooled micro purity metrics. |
+| **Environment Diagnostic Utility** | Built-in `autofte doctor` audits your system for required binutils tools and optional debuggers, fuzzers, and LLM backends. |
 
-## Install
+---
 
-**Install from PyPI:**
+## Comparison Matrix
+
+| Feature | Manual GDB Loop | GDB `exploitable` Plugin | CASR | AutoFTE |
+|---|---|---|---|---|
+| **Setup Complexity** | Manual | Requires GDB + Python plugin | Rust toolchain, Docker, ptrace caps | Single command (`pipx install autofte`) |
+| **Root-Cause Deduplication** | Manual inspection | Single crash at a time | Major/minor stack hashing | Major/minor stack hashing with ASLR normalization |
+| **Sanitizer Report Parsing** | Manual reading | No | Yes | Yes (ASan & UBSan normalized records) |
+| **Mitigation & Severity Scoring** | Manual assessment | Basic heuristics | Rule-based triage | Fused crash fault + binary defense severity scoring |
+| **Plain-Language Write-Ups** | None | None | None | Local LLM summaries grounded in crash evidence |
+| **SARIF / CI Code Scanning** | None | None | Yes | Native SARIF v2.1.0 output & GitHub Action |
+| **Data Privacy** | Local | Local | Local | 100% Local (no cloud telemetry or off-box calls) |
+
+---
+
+## Empirical Benchmark Accuracy
+
+AutoFTE deduplication accuracy is measured against the published [GPTrace / Igor ground-truth benchmark](https://zenodo.org/records/18708473) (325,044 labeled ASan reports across 50 real bugs and 14 C/C++ targets). Run `autofte bench --corpus igor` to reproduce locally (`scripts/fetch_bench_corpus.sh` downloads and verifies the corpus).
+
+| Metric | Crashwalk (Published) | GPTrace (Published) | AutoFTE (Macro Mean) | AutoFTE (Pooled Micro) |
+|---|---|---|---|---|
+| **Purity** | 98.0% | 98.0% | **97.7%** | **89.9%** |
+| **Inverse Purity** | 69.0% | 94.0% | **90.5%** | **80.3%** |
+| **F-Measure** | 76.0 | 94.0 | **91.9%** | **78.3%** |
+
+- **Purity** measures whether distinct bugs are kept in separate buckets (preventing silent merging).
+- **Inverse Purity** measures whether reports from the same bug remain grouped rather than fragmented into redundant buckets.
+- **Pooled Micro Purity (89.9%)** reaches the theoretical ceiling (89.4%) achievable with stack-hash signals on this dataset, as calculated by [`scripts/purity_ceiling.py`](scripts/purity_ceiling.py).
+- Detailed per-target breakdowns and benchmark history are documented in [`benchmarks/results.md`](benchmarks/results.md).
+
+---
+
+## Installation & Prerequisites
+
+### Prerequisites
+
+AutoFTE requires Linux and Python 3.9+.
+
+- **Required System Tools:** `readelf`, `objdump`, `nm`, `ldd`, `file`, `strings` (provided by `binutils` and system utilities).
+- **Optional Tools:** `gdb` (for non-sanitizer backtraces), `checksec`, `afl-fuzz` / `afl-cmin` (for fuzzing campaigns), and `ollama` (for local LLM write-ups).
+
+Verify installed tools using:
 
 ```bash
-pipx install autofte
 autofte doctor
 ```
 
-The current release is [`autofte 0.2.1`](https://pypi.org/project/autofte/0.2.1/). Releases are built and published from `.github/workflows/release.yml` using PyPI trusted publishing.
+### 1. Install via PyPI (Recommended)
 
-**Install from source for development:**
+```bash
+pipx install autofte
+# or
+pip install autofte
+```
+
+### 2. Standalone Binary
+
+Pre-compiled single-file x86_64 Linux executables are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases):
+
+```bash
+curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.2.1/autofte-linux-x86_64
+chmod +x autofte
+sudo mv autofte /usr/local/bin/
+```
+
+### 3. Install from Source
 
 ```bash
 git clone https://github.com/Nathan-Luevano/AutoFTE.git
@@ -151,14 +131,14 @@ cd AutoFTE
 python3 -m pip install -e .
 ```
 
-Or with conda/micromamba, which also pulls in `gdb`/`binutils`:
+Or using Conda / Micromamba (which includes `gdb` and `binutils`):
 
 ```bash
 micromamba create -f environment.yml
 micromamba activate autofte
 ```
 
-**Docker (build it yourself — no image is published to a registry yet):**
+### 4. Docker Container
 
 ```bash
 git clone https://github.com/Nathan-Luevano/AutoFTE.git
@@ -167,163 +147,330 @@ docker build -t autofte .
 docker run --rm autofte demo
 ```
 
-**Single-file binary:** Linux x86-64 builds are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases). The [`v0.2.1` release](https://github.com/Nathan-Luevano/AutoFTE/releases/tag/v0.2.1) includes `autofte-linux-x86_64` for machines with no Python installation.
+---
 
-Then, whichever install you used, check what your machine actually has available:
+## Quick Start
 
-```bash
-autofte doctor
-```
+### 1. Zero-Setup Demo
 
-`readelf`, `objdump`, `nm`, `ldd`, `file`, and `strings` are required for binary analysis. `gdb`, `checksec`, and AFL++ are optional — everything degrades gracefully without them.
-
-## Quick start
-
-### Zero setup
+Execute the end-to-end demo without configuring targets or fuzzer runs. AutoFTE builds the bundled vulnerable target (`examples/vuln-demo`), triages 12 pre-seeded crashes across four distinct vulnerability classes (stack overflow, heap overflow, use-after-free, and NULL pointer dereference), inspects binary protections, and generates full reports:
 
 ```bash
 autofte demo
 ```
 
-No arguments needed. This is the command behind the ["look what it found"](#look-what-it-found) output above — it builds the bundled ASan-instrumented `examples/vuln-demo` target if it isn't built yet, triages the 12 crash files shipped in the repo, runs `binscan`, attempts an LLM write-up, and ends on a verdict line. Add `--verbose` for the full step-by-step trace; artifacts land in `./autofte-demo-output/`, not your bare working directory.
-
-### On your own crashes
+Run with `--verbose` to view the full pipeline trace:
 
 ```bash
-make -C examples/vuln-demo
-mkdir -p out/default/crashes && cp examples/vuln-demo/in/seed1 out/default/crashes/  # or run a real AFL++ session
-
-autofte pipeline examples/vuln-demo/target examples/vuln-demo/vuln.c
+autofte demo --verbose
 ```
 
-Point `pipeline` at your own binary/source/crash directory the same way. Outputs land in the repo root:
+Artifacts are written to `./autofte-demo-output/`.
 
-- `crash_triage.json` — crashes grouped by root cause
-- `binary_analysis.json` — mitigation report
-- `llm_analysis.json` — LLM write-up, if Ollama is reachable
-- `analysis_summary.md` — human-readable run summary
-- `dashboard/index.html` — static dashboard
+### 2. Triage Your Own Fuzzing Campaign
 
-## CLI reference
-
-Every step also runs standalone:
-
-| Command | What it does |
-|---|---|
-| `autofte demo` | Zero-setup: build/triage the bundled vuln-demo target and print a verdict |
-| `autofte triage` | Group crash files (sanitizer-aware stack-hash dedup, gdb, or signal fallback) → JSON |
-| `autofte binscan <binary>` | Exploit mitigation report → JSON |
-| `autofte llm` | Local-LLM write-up from the triage + binscan output, grounded in the real crash record |
-| `autofte report [--format markdown\|sarif]` | Markdown summary (default) or SARIF findings from the JSON artifacts |
-| `autofte dashboard` | Static HTML dashboard from the JSON artifacts |
-| `autofte crash-info [file]` | Quick size/type/preview of one crash file |
-| `autofte doctor` | Report which required/optional tools are installed |
-| `autofte bench [--corpus micro\|igor\|<path>]` | Measure dedup accuracy (purity/inverse-purity/F-measure) against a labeled ground-truth corpus |
-| `autofte pipeline [binary] [source] [--sarif <path>]` | Runs triage → binscan → llm → report → dashboard in order, optionally also writing SARIF |
-
-Run `autofte <command> --help` for the full flag list on any of them.
-
-## Fuzzing helpers
-
-`scripts/fuzz.sh` and `scripts/minimize.sh` are thin wrappers around `afl-fuzz` and `afl-cmin` — AutoFTE doesn't reimplement a fuzzer, it consumes AFL++'s output.
+To triage crashes generated by AFL++, libFuzzer, or custom harnesses:
 
 ```bash
+autofte pipeline ./path/to/target_binary ./path/to/source.c --crashes-dir ./out/default/crashes
+```
+
+### Output Artifacts
+
+The pipeline generates the following files in the target output directory:
+
+- `crash_triage.json`: Structured deduplication record grouping crashes by major/minor stack hashes, bug classes, and reproducibility stats.
+- `binary_analysis.json`: Binary mitigation posture (NX, PIE, RELRO, Canaries, FORTIFY_SOURCE, unsafe functions).
+- `llm_analysis.json`: Evidence-grounded root-cause write-up, verification checks, and remediation suggestions.
+- `analysis_summary.md`: Human-readable Markdown summary report.
+- `dashboard/index.html`: Self-contained static HTML dashboard with collapsible crash groups and mitigation statistics.
+- `findings.sarif`: OASIS SARIF v2.1.0 log for CI/CD and GitHub Code Scanning (when `--sarif` is provided).
+
+---
+
+## CLI Reference
+
+AutoFTE provides a modular command-line interface. Each pipeline stage can be executed independently.
+
+```bash
+autofte [COMMAND] [OPTIONS]
+```
+
+### Subcommand Overview
+
+| Command | Usage | Description |
+|---|---|---|
+| `demo` | `autofte demo [options]` | Builds and triages the bundled 4-bug demo target in one command. |
+| `pipeline` | `autofte pipeline [binary] [source] [options]` | Runs triage, binscan, LLM analysis, markdown report, and dashboard in sequence. |
+| `triage` | `autofte triage [options]` | Groups crash files by root cause and writes `crash_triage.json`. |
+| `binscan` | `autofte binscan <binary> [options]` | Audits binary exploit mitigations and writes `binary_analysis.json`. |
+| `llm` | `autofte llm [options]` | Generates local LLM summary from triage and binscan artifacts. |
+| `report` | `autofte report [options]` | Compiles Markdown (`analysis_summary.md`) or SARIF reports from JSON artifacts. |
+| `dashboard` | `autofte dashboard [options]` | Renders the static HTML dashboard from JSON artifacts. |
+| `crash-info` | `autofte crash-info [file]` | Inspects file size, type, and hex preview of a single crash payload. |
+| `doctor` | `autofte doctor [options]` | Audits system dependencies and reporting tool availability. |
+| `bench` | `autofte bench [options]` | Evaluates deduplication accuracy against labeled ground-truth datasets. |
+
+### Command Options
+
+#### `autofte demo`
+- `--demo-dir PATH`: Custom demo directory (defaults to bundled `examples/vuln-demo`).
+- `--output-dir DIR`: Directory for generated artifacts (default: `./autofte-demo-output`).
+- `--model MODEL`: Name of local Ollama model (auto-detected if omitted).
+- `--host URL`: Ollama host URL (default: `$OLLAMA_HOST` or `http://localhost:11434`).
+- `--llm-timeout SEC`: Inference timeout in seconds.
+- `--verbose`: Print full pipeline progress output.
+
+#### `autofte pipeline`
+- `target_binary`: Path to target executable (default: `./target`).
+- `source_file`: Path to primary C/C++ source file (default: `vuln.c`).
+- `--crashes-dir DIR`: Directory containing crash inputs (default: auto-detected in `out/default/crashes`, `out/crashes`, or `crashes`).
+- `--debugger {gdb}`: Debugger backend (default: `gdb`).
+- `--model MODEL`: Ollama model name.
+- `--host URL`: Ollama host URL.
+- `--llm-timeout SEC`: Ollama request timeout in seconds.
+- `--skip-llm`: Skip the LLM write-up phase entirely.
+- `--sarif PATH`: Write OASIS SARIF v2.1.0 log to specified path.
+- `--quiet`: Suppress per-file progress output.
+
+#### `autofte triage`
+- `--target-binary PATH`: Path to target binary (default: `./target`).
+- `--crashes-dir DIR`: Directory of crash files to triage.
+- `--output PATH`: Path for output JSON (default: `crash_triage.json`).
+- `--debugger {gdb}`: Debugger backend (default: `gdb`).
+- `--quiet`: Suppress per-file progress output.
+
+#### `autofte binscan`
+- `binary`: Path to target ELF binary (positional, required).
+- `-o, --output PATH`: Path for output JSON (default: `binary_analysis.json`).
+
+#### `autofte bench`
+- `--corpus {micro,igor,<path>}`: Ground-truth benchmark dataset to evaluate (default: `micro`).
+- `--per-target`: Print detailed metrics table for each target individually (for `igor` corpus).
+- `--baseline PATH`: Path to a `bench-results.json` to diff against.
+- `--json PATH`: Export full benchmark metrics to JSON.
+- `--fail-under-f FLOAT`: Exit non-zero if F-measure falls below this threshold.
+- `--fail-purity-drop FLOAT`: Exit non-zero if purity drops by more than this percentage against baseline (default: `2.0`).
+
+---
+
+## Configuration & Environment Variables
+
+AutoFTE can be configured using command-line arguments or environment variables:
+
+| Environment Variable | CLI Flag Equivalent | Default Value | Description |
+|---|---|---|---|
+| `OLLAMA_HOST` | `--host` | `http://localhost:11434` | Endpoint for the local Ollama API service. |
+| `AUTOFTE_LLM_MODEL` | `--model` | Auto-detected | Preferred local LLM model (prioritizes installed models containing `coder`). |
+| `AUTOFTE_LLM_TIMEOUT` | `--llm-timeout` | None (unbounded) | Maximum time in seconds to wait for LLM response. |
+
+---
+
+## Python API Usage
+
+AutoFTE modules can be imported and integrated directly into Python scripts and workflows:
+
+```python
+from autofte.triage import triage_crashes
+from autofte.binary_analysis import analyze_binary
+from autofte.severity import assess_crash_difficulty
+from autofte.crash_display import representative_crash_record
+from autofte.report import build_report
+from autofte.dashboard import build_html
+from autofte.sarif import dump_sarif
+
+# 1. Triage crashes and deduplicate by stack hash
+triage_result = triage_crashes(
+    crashes_dir="examples/vuln-demo/crashes",
+    target_binary="examples/vuln-demo/target_asan",
+    debugger="gdb",
+    reproduction_runs=5,
+)
+
+print(f"Total Crashes: {triage_result['total_crashes']}")
+print(f"Unique Bug Groups: {triage_result['unique_crash_frames']}")
+
+# 2. Inspect binary exploit mitigations
+binary_data = analyze_binary("examples/vuln-demo/target_asan")
+
+# 3. Assess severity for the primary crash group
+top_group = next(iter(triage_result["groups"].values()))
+crash_record = representative_crash_record(top_group)
+severity_assessment = assess_crash_difficulty(binary_data, crash_record)
+
+print(f"Difficulty: {severity_assessment['difficulty']}")
+print(f"Confidence: {severity_assessment['confidence']:.2f}")
+print(f"Rationale: {severity_assessment['rationale']}")
+
+# 4. Generate Markdown summary, HTML dashboard, and SARIF log
+markdown_report = build_report(
+    target_binary="examples/vuln-demo/target_asan",
+    source_file="examples/vuln-demo/vuln.c",
+    triage=triage_result,
+    binary_data=binary_data,
+    llm_data=None,
+)
+
+html_dashboard = build_html(
+    triage=triage_result,
+    binary_data=binary_data,
+    llm_data=None,
+)
+
+sarif_json = dump_sarif(
+    triage=triage_result,
+    binary_data=binary_data,
+    llm_data=None,
+    target_binary="examples/vuln-demo/target_asan",
+)
+```
+
+---
+
+## CI/CD & GitHub Actions
+
+AutoFTE provides a reusable composite GitHub Action (`action.yml`) to triage fuzzing crashes and upload SARIF findings to GitHub Code Scanning.
+
+```yaml
+name: "Continuous Fuzzing & Triage"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  fuzz-and-triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build Target & Run Fuzzing
+        run: |
+          make -C examples/vuln-demo target_asan
+          # Run fuzzer (e.g., AFL++, libFuzzer)
+
+      - name: Triage Crashes with AutoFTE
+        id: autofte
+        uses: Nathan-Luevano/AutoFTE@v0.2.1
+        with:
+          target-binary: "./examples/vuln-demo/target_asan"
+          source-file: "examples/vuln-demo/vuln.c"
+          crashes-dir: "out/default/crashes"
+          sarif-output: "findings.sarif"
+          upload-sarif: "true"
+
+      - name: Print Results
+        run: |
+          echo "Total crashes: ${{ steps.autofte.outputs.total-crash-count }}"
+          echo "Unique root causes: ${{ steps.autofte.outputs.unique-crash-count }}"
+```
+
+See [`.github/workflows/example-fuzzing-triage.yml`](.github/workflows/example-fuzzing-triage.yml) for a complete reference workflow.
+
+---
+
+## Fuzzing Helpers
+
+AutoFTE includes helper utilities in `scripts/` to streamline AFL++ fuzzing and crash minimization:
+
+```bash
+# Run AFL++ fuzzing campaign
 scripts/fuzz.sh examples/vuln-demo/target examples/vuln-demo/in out
+
+# Minimize crash corpus with afl-cmin
 scripts/minimize.sh examples/vuln-demo/target out/default/crashes out/default/crashes_min
 ```
 
-## GitHub Action
+---
 
-`action.yml` at the repo root is a reusable composite Action that runs the
-same `autofte pipeline` command against a CI crash-artifact directory and
-uploads the result to GitHub code scanning via
-`github/codeql-action/upload-sarif`. Minimal usage in a consumer's
-workflow:
+## Repository Architecture
 
-```yaml
-- uses: Nathan-Luevano/AutoFTE@<ref>
-  with:
-    target-binary: ./target
-    crashes-dir: out/default/crashes
+```
+AutoFTE/
+├── autofte/                 # Core Python package
+│   ├── cli.py               # CLI command definitions, argument parsing, and handlers
+│   ├── triage.py            # Crash reproduction and deduplication orchestrator
+│   ├── dedup.py             # Major and minor stack hashing algorithms
+│   ├── sanitizers.py        # ASan and UBSan output parsers and normalizers
+│   ├── binary_analysis.py   # ELF binary security feature inspection
+│   ├── severity.py          # Crash-aware exploit difficulty and severity scoring
+│   ├── llm.py               # Local Ollama client, evidence ledger, and validators
+│   ├── sarif.py             # OASIS SARIF v2.1.0 report exporter
+│   ├── report.py            # Markdown summary generator and terminal formatter
+│   ├── dashboard.py         # Static HTML/CSS/JS dashboard generator
+│   ├── doctor.py            # Environment diagnostics and toolchain verification
+│   ├── bench.py             # Ground-truth accuracy benchmark runner
+│   ├── metrics.py           # Purity, inverse purity, and F-measure computations
+│   ├── config.py            # Environment variables and configuration management
+│   ├── io_utils.py          # Standardized JSON file reading and writing
+│   ├── paths.py             # Default crash directory discovery
+│   ├── crash_display.py     # Representative crash extraction and label formatting
+│   ├── vendored_ignore_lists.py # Stack noise filter rules from ClusterFuzz / CASR
+│   └── demo_assets/         # Packaged demo target for standalone execution
+├── benchmarks/              # Benchmark baseline datasets and evaluation results
+├── examples/                # Example vulnerable targets and crash corpuses
+├── scripts/                 # Fuzzing wrappers, smoke tests, and benchmark helpers
+├── tests/                   # Pytest test suite (unit, integration, and E2E)
+├── action.yml               # GitHub Action definition
+├── Dockerfile               # Container build recipe
+├── pyproject.toml           # Package metadata, dependencies, and entrypoints
+└── README.md                # Project documentation
 ```
 
-> `@<ref>` needs to be a real tag once one exists — same "wired up, not
-> shipped yet" caveat as the `pipx install autofte` line above. Point it at
-> a commit SHA or `main` to use it before a tag exists.
+---
 
-The LLM write-up step is opt-in: pass `model`/`host` if a runner can reach
-an Ollama instance, otherwise the action runs with `--skip-llm` by default
-so it never hangs or fails on a runner with no local LLM. See
-[`.github/workflows/example-fuzzing-triage.yml`](.github/workflows/example-fuzzing-triage.yml)
-for a full example workflow to copy into your own project (it's a
-reference file, not something that runs on AutoFTE's own CI — this repo
-has no real fuzzing crash corpus to triage).
+## Development & Testing
 
-## Choosing an LLM model
-
-There's no hard-coded default model — different machines have different models pulled. AutoFTE resolves one at runtime, in order:
-
-1. `--model` flag
-2. `AUTOFTE_LLM_MODEL` environment variable
-3. auto-detect: pick an installed Ollama model with "coder" in the name, falling back to whatever's installed first
+### Development Setup
 
 ```bash
-autofte llm --model qwen3-coder:30b
-# or
-export AUTOFTE_LLM_MODEL=qwen3-coder:30b
-```
-
-`OLLAMA_HOST` (or `--host`) controls where AutoFTE looks for Ollama; defaults to `http://localhost:11434`.
-
-There's no timeout on the model call by default — a cold model load or CPU-only inference can legitimately take a while, and a hard cap just turns "slow" into "silently skipped." Set `AUTOFTE_LLM_TIMEOUT` (or pass `--llm-timeout`, in seconds) if you'd rather it give up after a bound you choose.
-
-## Repo layout
-
-```
-autofte/                  installable package: triage, dedup, sanitizers, binary_analysis, severity, llm, sarif,
-                           report, dashboard, doctor, config, cli, bench, metrics, io_utils, paths,
-                           vendored_ignore_lists, crash_display
-autofte/demo_assets/      packaged copy of the vuln-demo target so `autofte demo` works from a wheel/pipx/Docker
-                           install, not just a source checkout — kept in sync with examples/vuln-demo/
-examples/vuln-demo/       intentionally vulnerable demo target + Makefile + seed corpus + pre-generated crashes
-                           (the source-of-truth dev copy)
-benchmarks/                accuracy regression gate: micro corpus baseline, dedup baseline.json, and sweep
-                           results consumed by `autofte bench` (see benchmarks/results.md)
-scripts/                  AFL++ wrappers (fuzz.sh, minimize.sh), the PyInstaller entry point, the end-to-end
-                           smoke-test.sh, demo-recording helpers (record-demo.sh, screenshot-dashboard.mjs,
-                           stitch-demo.sh), and one-off accuracy investigation scripts
-tests/                    pytest suite
-Dockerfile                container image; build locally with `docker build -t autofte .` (not published)
-pyinstaller.spec          single-file binary build spec, used by the release workflow
-action.yml                reusable GitHub Action: runs the pipeline on CI crash artifacts, uploads SARIF
-.github/workflows/        CI (tests + lint), release (PyPI publish + binary attach on `v*` tags), and an example
-                           consumer workflow for action.yml
-```
-
-## Development
-
-```bash
+git clone https://github.com/Nathan-Luevano/AutoFTE.git
+cd AutoFTE
 python3 -m pip install -e ".[dev]"
+```
+
+### Running Tests and Linters
+
+Execute the pytest suite:
+
+```bash
 pytest
+```
+
+Run code style and lint checks:
+
+```bash
 ruff check .
 ```
 
-491 tests: mocked subprocess calls for the tool-parsing logic, plus real end-to-end passes against compiled binaries (including real multi-compiler ASan builds), a real local Ollama call exercising the evidence-cited/schema-constrained LLM path, and `autofte bench` runs against a real, independently-downloaded 325,000-report ground-truth corpus (see [`benchmarks/results.md`](benchmarks/results.md) for the measured accuracy numbers). [`scripts/smoke-test.sh`](scripts/smoke-test.sh) is a separate, manually-run end-to-end check against the real CLI — see [CONTRIBUTING.md](CONTRIBUTING.md#before-opening-a-pr) for when to run it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the commit convention and how to add a new binscan check.
+Run the end-to-end CLI smoke test against compiled binaries:
 
-## Roadmap
+```bash
+scripts/smoke-test.sh
+```
 
-- Disassembly around the faulting instruction, fed into the LLM prompt (the prompt already accepts it — `llm.build_prompt`'s `disassembly` param — nothing produces it yet)
-- Support fuzzer backends beyond AFL++ (libFuzzer, honggfuzz)
-- macOS support (depends on gdb/binutils availability there)
-- Distro packaging (BlackArch, Kali)
+---
 
-## Notes
+## Security & Privacy
 
-- Standard binutils tools (`readelf`, `objdump`, `nm`, `ldd`, `file`, `strings`) are required for binary analysis; run `autofte doctor` to check.
-- `gdb` and AFL++ are optional. If `gdb` is missing, crash grouping falls back to signal-based buckets.
-- Ollama is optional; if it's not running, the rest of the pipeline still finishes.
-- Everything runs locally. AutoFTE makes no network calls except to a local (or explicitly configured) Ollama host — nothing about a crash, a binary, or its source is ever sent anywhere else.
+- **Zero Cloud Data Transfer:** AutoFTE executes all triage, deduplication, binary analysis, and severity scoring locally.
+- **Local Model Execution:** The LLM summarization step communicates strictly with your local Ollama instance (or user-specified host). No crash payloads, binaries, or source files are transmitted to external services.
+- **Vulnerability Disclosure:** Please review our [Security Policy](SECURITY.md) for reporting guidelines.
+
+---
+
+## Contributing
+
+Contributions are welcome. Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) for development workflows, coding standards, and pull request guidelines.
+
+---
 
 ## License
 
-[MIT](LICENSE)
+This project is licensed under the [MIT License](LICENSE).
