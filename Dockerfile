@@ -1,5 +1,5 @@
 # --- builder: build a wheel, keep build tooling out of the final image ---
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /src
 
@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir build \
     && python -m build --wheel --outdir /wheels
 
 # --- runtime: only what autofte needs to run and to build the demo target ---
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # gdb/binutils/file back the binary-analysis and triage pipeline; build-essential
 # provides the gcc/make `autofte demo` needs to compile the bundled vuln-demo target.
