@@ -37,7 +37,7 @@ jobs:
 
       - name: Upload bench results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-results-igor
           path: bench-results-igor.json
