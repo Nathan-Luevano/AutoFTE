@@ -54,6 +54,6 @@ jobs:
         run: mv dist/autofte dist/autofte-linux-x86_64
 
       - name: Attach binary to the GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/autofte-linux-x86_64
