@@ -109,6 +109,14 @@ def test_build_report_limits_to_five_groups():
     assert shown == 5
 
 
+def test_build_report_max_groups_override():
+    groups = {f"SIG{i}": {"count": 1, "crashes": [{"file": f"c{i}", "size": 1}]} for i in range(8)}
+    triage = {"total_crashes": 8, "unique_crash_frames": 8, "groups": groups}
+    text = build_report("./target", "vuln.c", triage, {}, {}, max_groups=2)
+    shown = sum(1 for i in range(8) if f"SIG{i}" in text)
+    assert shown == 2
+
+
 def test_build_report_binary_protections_section():
     binary_data = {
         "exploit_mitigation_summary": {

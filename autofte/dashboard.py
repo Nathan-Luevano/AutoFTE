@@ -68,9 +68,11 @@ def _group_row(rank, frame, data, assessment):
     )
 
 
-def build_html(triage, binary_data, llm_data):
+def build_html(triage, binary_data, llm_data, max_groups=None):
+    if max_groups is None:
+        max_groups = MAX_GROUPS_SHOWN
     groups = triage.get("groups", {})
-    ranked = _ranked_groups(groups, binary_data)[:MAX_GROUPS_SHOWN]
+    ranked = _ranked_groups(groups, binary_data)[:max_groups]
     group_rows = [
         _group_row(rank, frame, data, assessment)
         for rank, (_score, _neg, frame, data, assessment) in enumerate(ranked, start=1)

@@ -28,7 +28,9 @@ _PROTECTION_LABELS = (
 MAX_GROUPS_SHOWN = 5
 
 
-def build_report(target_binary, source_file, triage, binary_data, llm_data):
+def build_report(target_binary, source_file, triage, binary_data, llm_data, max_groups=None):
+    if max_groups is None:
+        max_groups = MAX_GROUPS_SHOWN
     lines = [
         "# AutoFTE run summary",
         "",
@@ -53,7 +55,7 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data):
                 "",
             ]
         )
-        for index, (frame, data) in enumerate(list(groups.items())[:MAX_GROUPS_SHOWN], start=1):
+        for index, (frame, data) in enumerate(list(groups.items())[:max_groups], start=1):
             sample = data.get("crashes", [{}])[0]
             count = data.get("count", 0)
             crash_record = crash_display.representative_crash_record(data)

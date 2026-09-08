@@ -220,7 +220,12 @@ def cmd_report(args):
         )
     else:
         text = report.build_report(
-            args.target_binary, args.source_file, triage, binary_data, llm_data
+            args.target_binary,
+            args.source_file,
+            triage,
+            binary_data,
+            llm_data,
+            max_groups=getattr(args, "top", None),
         )
         Path(args.output).write_text(text, encoding="utf-8")
 
@@ -237,7 +242,9 @@ def cmd_dashboard(args):
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / "index.html"
-    html_text = dashboard.build_html(triage, binary_data, llm_data)
+    html_text = dashboard.build_html(
+        triage, binary_data, llm_data, max_groups=getattr(args, "top", None)
+    )
     output_file.write_text(html_text, encoding="utf-8")
     if not getattr(args, "quiet", False):
         print(f"Wrote {output_file}")
@@ -777,6 +784,9 @@ def build_parser():
     p_report.add_argument("--llm-analysis", default="llm_analysis.json")
     p_report.add_argument("--output", default="analysis_summary.md")
     p_report.add_argument(
+        "--top", type=int, help="Max crash groups to include in the markdown summary"
+    )
+    p_report.add_argument(
         "--format",
         choices=("markdown", "sarif", "json"),
         default="markdown",
@@ -792,6 +802,9 @@ def build_parser():
     p_dashboard.add_argument("--binary-analysis", default="binary_analysis.json")
     p_dashboard.add_argument("--llm-analysis", default="llm_analysis.json")
     p_dashboard.add_argument("--output-dir", default="dashboard")
+    p_dashboard.add_argument(
+        "--top", type=int, help="Max crash groups to show in the dashboard table"
+    )
     p_dashboard.set_defaults(func=cmd_dashboard)
 
     p_summary = subparsers.add_parser(

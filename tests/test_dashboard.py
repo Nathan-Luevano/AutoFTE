@@ -79,6 +79,13 @@ def test_build_html_group_rows_limited_to_eight():
     assert shown == 8
 
 
+def test_build_html_max_groups_override():
+    groups = {f"SIG{i}": {"count": 1, "crashes": [{"file": f"c{i}", "size": 1}]} for i in range(12)}
+    html = build_html({"groups": groups}, {}, {}, max_groups=3)
+    shown = sum(1 for i in range(12) if f">SIG{i}<" in html)
+    assert shown == 3
+
+
 def test_build_html_group_row_shows_bug_class_and_signature():
     triage = {
         "groups": {
