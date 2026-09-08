@@ -71,6 +71,13 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data, max_
                 lines.append(f"- Signature: `{frame}`")
             lines.append(f"- Sample crash file: `{sample.get('file', 'n/a')}`")
 
+            crashes = data.get("crashes", [])
+            reproducible = sum(
+                1 for c in crashes if c.get("reproducibility") == "reproducible"
+            )
+            if crashes and any("reproducibility" in c for c in crashes):
+                lines.append(f"- Reproducible: {reproducible}/{len(crashes)}")
+
             lines.append(
                 f"- Difficulty: **{assessment['difficulty']}** "
                 f"(confidence {assessment['confidence']:.2f})"

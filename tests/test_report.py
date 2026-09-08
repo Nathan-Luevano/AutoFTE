@@ -109,6 +109,34 @@ def test_build_report_limits_to_five_groups():
     assert shown == 5
 
 
+def test_build_report_shows_reproducibility_when_present():
+    triage = {
+        "total_crashes": 3,
+        "unique_crash_frames": 1,
+        "groups": {
+            "SIGSEGV": {
+                "count": 3,
+                "crashes": [
+                    {"file": "c1", "reproducibility": "reproducible"},
+                    {"file": "c2", "reproducibility": "reproducible"},
+                    {"file": "c3", "reproducibility": "non-reproducible"},
+                ],
+            }
+        },
+    }
+    text = build_report("./target", "vuln.c", triage, {}, {})
+    assert "- Reproducible: 2/3" in text
+
+
+def test_build_report_omits_reproducibility_when_absent():
+    triage = {
+        "total_crashes": 1,
+        "unique_crash_frames": 1,
+        "groups": {"SIGSEGV": {"count": 1, "crashes": [{"file": "c1"}]}},
+    }
+    assert "Reproducible:" not in build_report("./target", "vuln.c", triage, {}, {})
+
+
 def test_build_report_groups_ordered_by_severity():
     triage = {
         "total_crashes": 2,
