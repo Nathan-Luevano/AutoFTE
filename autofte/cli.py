@@ -233,6 +233,33 @@ def cmd_dashboard(args):
     return 0
 
 
+def cmd_summary(args):
+    for path in (args.triage_json, args.binary_analysis, args.llm_analysis):
+        if not Path(path).exists():
+            print(f"Error: file not found: {path}")
+            return 1
+
+    data = summary.build_summary(
+        args.target_binary,
+        args.source_file,
+        load_json(args.triage_json),
+        load_json(args.binary_analysis),
+        load_json(args.llm_analysis),
+    )
+    if args.json:
+        write_json(args.output, data)
+        if not getattr(args, "quiet", False):
+            print(f"Wrote {args.output}")
+        return 0
+
+    print(summary.render_table(data))
+    if args.fail_on_difficulty:
+        hits = summary.groups_at_or_above(data, args.fail_on_difficulty)
+        if hits:
+            return 2
+    return 0
+
+
 def cmd_crash_info(args):
     crash_file = Path(args.crash_file) if args.crash_file else _latest_crash_file()
     if crash_file is None or not crash_file.is_file():
@@ -749,6 +776,23 @@ def build_parser():
     p_dashboard.add_argument("--llm-analysis", default="llm_analysis.json")
     p_dashboard.add_argument("--output-dir", default="dashboard")
     p_dashboard.set_defaults(func=cmd_dashboard)
+
+    p_summary = subparsers.add_parser(
+        "summary", help="Print a severity-ranked table from analysis artifacts"
+    )
+    p_summary.add_argument("--target-binary", default="./target")
+    p_summary.add_argument("--source-file", default="vuln.c")
+    p_summary.add_argument("--triage-json", default="crash_triage.json")
+    p_summary.add_argument("--binary-analysis", default="binary_analysis.json")
+    p_summary.add_argument("--llm-analysis", default="llm_analysis.json")
+    p_summary.add_argument("--json", action="store_true", help="Write JSON instead of a table")
+    p_summary.add_argument("--output", default="summary.json")
+    p_summary.add_argument(
+        "--fail-on-difficulty",
+        choices=("easy", "medium", "hard"),
+        help="Exit non-zero if any crash group is at or above this exploit difficulty",
+    )
+    p_summary.set_defaults(func=cmd_summary)
 
     p_crash_info = subparsers.add_parser(
         "crash-info", help="Print quick details about one crash file"

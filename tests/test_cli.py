@@ -12,6 +12,7 @@ SUBCOMMANDS_MIN_ARGS = {
     "binscan": ["some-binary"],
     "llm": [],
     "report": [],
+    "summary": [],
     "dashboard": [],
     "crash-info": [],
     "doctor": [],
@@ -471,6 +472,41 @@ def test_cmd_pipeline_success_with_skip_llm(tmp_path, monkeypatch, capsys):
     assert llm_result["status"] == "skipped"
     out = capsys.readouterr().out
     assert "Done." not in out
+
+
+def test_cmd_summary_prints_table(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "triage.json").write_text(
+        json.dumps(
+            {
+                "total_crashes": 2,
+                "unique_crash_frames": 1,
+                "groups": {"sig": {"count": 2, "crashes": [{"file": "c1"}]}},
+            }
+        )
+    )
+    (tmp_path / "binary.json").write_text(json.dumps({"exploit_mitigation_summary": {}}))
+    (tmp_path / "llm.json").write_text(json.dumps({"status": "skipped"}))
+
+    rc = cli.main(
+        [
+            "summary",
+            "--triage-json",
+            "triage.json",
+            "--binary-analysis",
+            "binary.json",
+            "--llm-analysis",
+            "llm.json",
+        ]
+    )
+    assert rc == 0
+    assert "DIFFICULTY" in capsys.readouterr().out
+
+
+def test_cmd_summary_missing_file_returns_error(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    rc = cli.main(["summary"])
+    assert rc == 1
 
 
 def test_cmd_pipeline_fail_on_difficulty_returns_gate_code(tmp_path, monkeypatch, capsys):

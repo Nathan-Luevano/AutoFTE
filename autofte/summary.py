@@ -94,6 +94,37 @@ def _llm_section(llm_data):
     return section or None
 
 
+def render_table(summary):
+    totals = summary.get("totals", {})
+    lines = [
+        f"Target: {summary.get('target_binary', 'n/a')}",
+        f"Crashes: {totals.get('crashes', 0)}  "
+        f"Unique groups: {totals.get('unique_groups', 0)}  "
+        f"Mode: {totals.get('triage_mode') or 'n/a'}",
+        "",
+        f"{'#':>2}  {'DIFFICULTY':<10} {'CONF':>5} {'COUNT':>6}  BUG",
+    ]
+    groups = summary.get("groups", [])
+    if not groups:
+        lines.append("(no crash groups)")
+        return "\n".join(lines)
+    for group in groups:
+        bug = group.get("bug_class_label") or group.get("signature") or "unknown"
+        lines.append(
+            f"{group.get('rank', 0):>2}  {group.get('difficulty', '?'):<10} "
+            f"{group.get('confidence', 0):>5.2f} {group.get('count', 0):>6}  {bug}"
+        )
+    binary = summary.get("binary", {})
+    lines.extend(
+        [
+            "",
+            f"Binary: protection level {binary.get('protection_level', 'Unknown')}, "
+            f"{len(binary.get('protections', {}))} checks resolved",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_summary(target_binary, source_file, triage, binary_data, llm_data):
     groups = _group_entries(triage, binary_data)
     return {

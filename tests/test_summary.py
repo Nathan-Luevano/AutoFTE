@@ -1,6 +1,6 @@
 import pytest
 
-from autofte.summary import SCHEMA, build_summary, groups_at_or_above
+from autofte.summary import SCHEMA, build_summary, groups_at_or_above, render_table
 
 
 def _triage():
@@ -114,6 +114,19 @@ def test_groups_at_or_above_filters_by_exploitability():
 def test_groups_at_or_above_rejects_unknown():
     with pytest.raises(ValueError):
         groups_at_or_above({"groups": []}, "nope")
+
+
+def test_render_table_lists_ranked_groups():
+    text = render_table(build_summary("./target", "vuln.c", _triage(), {}, {}))
+    assert "DIFFICULTY" in text
+    assert "stack-buffer-overflow (write, 64 bytes)" in text
+    lines = [ln for ln in text.splitlines() if ln.strip().startswith(("1", "2"))]
+    assert lines[0].split()[1] == "Easy"
+
+
+def test_render_table_handles_no_groups():
+    text = render_table(build_summary("./target", "vuln.c", {}, {}, {}))
+    assert "(no crash groups)" in text
 
 
 def test_empty_inputs():
