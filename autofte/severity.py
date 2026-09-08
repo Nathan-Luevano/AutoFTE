@@ -131,6 +131,10 @@ DEFAULT_BUG_CLASS_PROFILE = (
 
 ACCESS_TYPE_DELTA = {"write": -0.5, "read": 0.5}
 
+LARGE_ACCESS_SIZE = 16
+LARGE_ACCESS_DELTA = -0.3
+SINGLE_BYTE_ACCESS_DELTA = 0.2
+
 EASY_MEDIUM_BOUNDARY = 2.0
 MEDIUM_HARD_BOUNDARY = 4.0
 
@@ -238,7 +242,15 @@ def _score_crash_record(binary_analysis, crash_record):
     if bug_class == "stack-buffer-overflow" and access_type == "write":
         stack_write_bonus = -1.0
 
-    delta = class_delta + access_delta + stack_write_bonus
+    access_size = crash_record.get("access_size")
+    size_delta = 0.0
+    if access_type == "write" and isinstance(access_size, int):
+        if access_size >= LARGE_ACCESS_SIZE:
+            size_delta = LARGE_ACCESS_DELTA
+        elif access_size == 1:
+            size_delta = SINGLE_BYTE_ACCESS_DELTA
+
+    delta = class_delta + access_delta + stack_write_bonus + size_delta
     if access_type:
         fault_summary = f"{bug_class} ({access_type}) -- {class_desc}"
     else:

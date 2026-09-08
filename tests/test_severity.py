@@ -41,12 +41,14 @@ STRONG_ANALYSIS = _mitigation_analysis(
 )
 
 
-def _crash_record(bug_class, access_type, *, func="vuln", alloc_stack=None, free_stack=None):
+def _crash_record(
+    bug_class, access_type, *, func="vuln", alloc_stack=None, free_stack=None, access_size=8
+):
     return {
         "sanitizer": "AddressSanitizer",
         "bug_class": bug_class,
         "access_type": access_type,
-        "access_size": 8,
+        "access_size": access_size,
         "fault_addr": "0xdeadbeef",
         "crash_stack": [
             {"frame": 0, "addr": "0x1", "func": func, "file": "vuln.c", "line": 8}
@@ -136,6 +138,26 @@ def test_stack_buffer_overflow_write_gets_extra_penalty_over_heap_write():
     )
     assert stack_write["score"] < heap_write["score"]
     assert "saved registers" in stack_write["rationale"].lower()
+
+
+def test_large_write_scores_more_severe_than_single_byte_write():
+    large = assess_crash_difficulty(
+        WEAK_ANALYSIS, _crash_record("heap-buffer-overflow", "write", access_size=64)
+    )
+    tiny = assess_crash_difficulty(
+        WEAK_ANALYSIS, _crash_record("heap-buffer-overflow", "write", access_size=1)
+    )
+    assert large["score"] < tiny["score"]
+
+
+def test_access_size_ignored_for_reads():
+    big_read = assess_crash_difficulty(
+        WEAK_ANALYSIS, _crash_record("heap-buffer-overflow", "read", access_size=64)
+    )
+    small_read = assess_crash_difficulty(
+        WEAK_ANALYSIS, _crash_record("heap-buffer-overflow", "read", access_size=1)
+    )
+    assert big_read["score"] == small_read["score"]
 
 
 def test_rationale_omits_direction_qualifier_when_access_type_is_unknown():
