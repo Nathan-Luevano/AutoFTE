@@ -41,6 +41,17 @@ def test_fault_function_name_picks_first_symbolized_frame():
     assert disasm.fault_function_name(None) is None
 
 
+def test_fault_function_name_skips_sanitizer_interceptor_frames():
+    record = {
+        "crash_stack": [
+            {"frame": 0, "func": "__interceptor_memcpy", "file": None, "line": None},
+            {"frame": 1, "func": "copy_row", "file": "img.c", "line": 88},
+            {"frame": 2, "func": "main", "file": "img.c", "line": 12},
+        ]
+    }
+    assert disasm.fault_function_name(record) == "copy_row"
+
+
 def test_disassemble_fault_context_windows_around_fault(monkeypatch):
     monkeypatch.setattr(disasm, "objdump_available", lambda: True)
     monkeypatch.setattr(disasm, "_run_objdump", lambda binary: OBJDUMP_FIXTURE)

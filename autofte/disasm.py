@@ -2,6 +2,8 @@ import re
 import shutil
 import subprocess
 
+from . import dedup
+
 DEFAULT_WINDOW = 10
 MAX_FUNCTION_LINES = 60
 
@@ -28,21 +30,29 @@ def _run_objdump(binary):
     return result.stdout
 
 
+def _fault_frame(crash_record):
+    frames = [
+        frame
+        for frame in (crash_record or {}).get("crash_stack") or []
+        if frame.get("func")
+    ]
+    significant = dedup.significant_frames(frames)
+    candidates = significant or frames
+    return candidates[0] if candidates else None
+
+
 def fault_function_name(crash_record):
-    for frame in (crash_record or {}).get("crash_stack") or []:
-        func = frame.get("func")
-        if func:
-            return func
-    return None
+    frame = _fault_frame(crash_record)
+    return frame.get("func") if frame else None
 
 
 def _fault_address(crash_record):
-    for frame in (crash_record or {}).get("crash_stack") or []:
-        if frame.get("func"):
-            addr = frame.get("addr")
-            if addr:
-                return addr.lower().lstrip("0x") or "0"
-            return None
+    frame = _fault_frame(crash_record)
+    if not frame:
+        return None
+    addr = frame.get("addr")
+    if addr:
+        return addr.lower().lstrip("0x") or "0"
     return None
 
 
