@@ -185,6 +185,7 @@ The pipeline generates the following files in the target output directory:
 - `analysis_summary.md`: Human-readable Markdown summary report.
 - `dashboard/index.html`: Self-contained static HTML dashboard with collapsible crash groups and mitigation statistics.
 - `findings.sarif`: OASIS SARIF v2.1.0 log for CI/CD and GitHub Code Scanning (when `--sarif` is provided).
+- `summary.json`: Consolidated machine-readable summary with severity-ranked crash groups, binary posture, and LLM notes (when `--summary-json` is provided).
 
 ---
 
@@ -205,7 +206,7 @@ autofte [COMMAND] [OPTIONS]
 | `triage` | `autofte triage [options]` | Groups crash files by root cause and writes `crash_triage.json`. |
 | `binscan` | `autofte binscan <binary> [options]` | Audits binary exploit mitigations and writes `binary_analysis.json`. |
 | `llm` | `autofte llm [options]` | Generates local LLM summary from triage and binscan artifacts. |
-| `report` | `autofte report [options]` | Compiles Markdown (`analysis_summary.md`) or SARIF reports from JSON artifacts. |
+| `report` | `autofte report [options]` | Compiles Markdown (`analysis_summary.md`), SARIF, or a consolidated JSON summary (`--format json`) from JSON artifacts. |
 | `dashboard` | `autofte dashboard [options]` | Renders the static HTML dashboard from JSON artifacts. |
 | `crash-info` | `autofte crash-info [file]` | Inspects file size, type, and hex preview of a single crash payload. |
 | `doctor` | `autofte doctor [options]` | Audits system dependencies and reporting tool availability. |
@@ -231,6 +232,7 @@ autofte [COMMAND] [OPTIONS]
 - `--llm-timeout SEC`: Ollama request timeout in seconds.
 - `--skip-llm`: Skip the LLM write-up phase entirely.
 - `--sarif PATH`: Write OASIS SARIF v2.1.0 log to specified path.
+- `--summary-json PATH`: Write a consolidated JSON summary (severity-ranked crash groups, binary posture, LLM notes) to specified path.
 - `--quiet`: Suppress per-file progress output.
 
 #### `autofte triage`
