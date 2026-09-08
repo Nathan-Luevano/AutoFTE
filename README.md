@@ -10,7 +10,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-548%20passing-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/tests-563%20passing-brightgreen.svg)](tests/)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C / C++](https://img.shields.io/badge/C%20%2F%20C%2B%2B-00599C?logo=c%2B%2B&logoColor=white)](https://en.wikipedia.org/wiki/C%2B%2B)
@@ -52,7 +52,7 @@ AutoFTE runs completely offline. No crash data, binaries, or source code ever le
 | **Deterministic Crash Deduplication** | Groups crashes using major/minor stack-hash algorithms. Extracts bug classes, read/write access types, access sizes, fault addresses, and alloc/free stacks from ASan/UBSan/LSan/MSan/TSan reports. Falls back to GDB backtraces or exit-signal bucketing when sanitizer metadata is absent. |
 | **Binary Mitigation Scanning** | Inspects ELF binaries using standard binutils (`readelf`, `objdump`, `nm`, `ldd`, `file`, `strings`) to audit NX, PIE, Full/Partial RELRO, Stack Canaries, FORTIFY_SOURCE, and unsafe C library symbols (`strcpy`, `gets`, `sprintf`). |
 | **Context-Aware Exploit Severity** | Evaluates exploit difficulty (`Easy`, `Medium`, `Hard`, `Unknown`) with explicit confidence scores and justification strings based on the intersection of fault type and binary mitigations. |
-| **Grounded Local LLM Summaries** | Invokes local Ollama models via strict JSON schema constraints and a 6-stage deterministic validator pipeline to summarize root causes, suggest verification checks, and draft fixes without ungrounded claims. Skips cleanly if Ollama is unavailable. |
+| **Grounded Local LLM Summaries** | Invokes local Ollama models via strict JSON schema constraints and a 6-stage deterministic validator pipeline to summarize root causes, suggest verification checks, and draft fixes without ungrounded claims. Grounds the prompt in the normalized crash record, mitigation posture, and objdump disassembly of the faulting function. Skips cleanly if Ollama is unavailable. |
 | **Static Dashboard & SARIF Export** | Builds a zero-dependency static HTML dashboard (`dashboard/index.html`) with interactive details, collapsible stack traces, and mitigation summaries. Emits OASIS SARIF v2.1.0 findings for CI/CD code scanning. |
 | **Empirically Benchmarked Accuracy** | Evaluated against the standard GPTrace/Igor benchmark (325,044 ground-truth ASan crash reports across 14 C/C++ targets) with published macro and pooled micro purity metrics. |
 | **Environment Diagnostic Utility** | Built-in `autofte doctor` audits your system for required binutils tools and optional debuggers, fuzzers, and LLM backends. |
@@ -118,7 +118,7 @@ pip install autofte
 Pre-compiled single-file x86_64 Linux executables are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases):
 
 ```bash
-curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.3.0/autofte-linux-x86_64
+curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.4.0/autofte-linux-x86_64
 chmod +x autofte
 sudo mv autofte /usr/local/bin/
 ```
@@ -205,7 +205,7 @@ autofte [COMMAND] [OPTIONS]
 | `pipeline` | `autofte pipeline [binary] [source] [options]` | Runs triage, binscan, LLM analysis, markdown report, and dashboard in sequence. |
 | `triage` | `autofte triage [options]` | Groups crash files by root cause and writes `crash_triage.json`. |
 | `binscan` | `autofte binscan <binary> [options]` | Audits binary exploit mitigations and writes `binary_analysis.json`. |
-| `llm` | `autofte llm [options]` | Generates local LLM summary from triage and binscan artifacts. |
+| `llm` | `autofte llm [options]` | Generates a local LLM summary grounded in the crash record, mitigation posture, and objdump disassembly of the faulting function. |
 | `report` | `autofte report [options]` | Compiles Markdown (`analysis_summary.md`), SARIF, or a consolidated JSON summary (`--format json`) from JSON artifacts. |
 | `summary` | `autofte summary [options]` | Prints a severity-ranked crash-group table, or writes JSON/CSV with `--format`, from analysis artifacts. |
 | `dashboard` | `autofte dashboard [options]` | Renders the static HTML dashboard from JSON artifacts. |
@@ -364,7 +364,7 @@ jobs:
 
       - name: Triage Crashes with AutoFTE
         id: autofte
-        uses: Nathan-Luevano/AutoFTE@v0.3.0
+        uses: Nathan-Luevano/AutoFTE@v0.4.0
         with:
           target-binary: "./examples/vuln-demo/target_asan"
           source-file: "examples/vuln-demo/vuln.c"
