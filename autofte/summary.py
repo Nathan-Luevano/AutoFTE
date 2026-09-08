@@ -57,6 +57,7 @@ def _group_entries(triage, binary_data):
         entries.append(
             {
                 "signature": signature,
+                "group_id": data.get("group_id"),
                 "bug_class": (crash_record or {}).get("bug_class"),
                 "bug_class_label": crash_display.bug_class_label(crash_record),
                 "access_type": (crash_record or {}).get("access_type"),

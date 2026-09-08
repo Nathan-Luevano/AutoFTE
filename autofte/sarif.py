@@ -180,19 +180,22 @@ def build_sarif(triage, binary_data, llm_data=None, target_binary=None):
             rule_id, {"id": rule_id, "shortDescription": {"text": heading}}
         )
 
-        results.append(
-            {
-                "ruleId": rule_id,
-                "level": level,
-                "message": {"text": _build_message(heading, assessment, llm_data)},
-                "locations": [_build_location(label, crash_record, target_binary)],
-                "properties": {
-                    "confidence": assessment["confidence"],
-                    "crash_count": group_data.get("count", 0),
-                    "basis": assessment["basis"],
-                },
-            }
-        )
+        result = {
+            "ruleId": rule_id,
+            "level": level,
+            "message": {"text": _build_message(heading, assessment, llm_data)},
+            "locations": [_build_location(label, crash_record, target_binary)],
+            "properties": {
+                "confidence": assessment["confidence"],
+                "crash_count": group_data.get("count", 0),
+                "basis": assessment["basis"],
+                "difficulty": assessment["difficulty"],
+            },
+        }
+        group_id = group_data.get("group_id")
+        if group_id:
+            result["partialFingerprints"] = {"autofteGroupId/v1": group_id}
+        results.append(result)
 
     driver = {
         "name": "AutoFTE",

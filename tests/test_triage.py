@@ -226,6 +226,8 @@ def test_triage_crashes_groups_by_signature_direct_mode(crashes_dir, make_execut
     # crashes within a group sorted by size ascending
     sizes = [c["size"] for c in groups["SIGSEGV"]["crashes"]]
     assert sizes == sorted(sizes)
+    assert groups["SIGSEGV"]["group_id"] == "raw:SIGSEGV"
+    assert groups["SIGABRT"]["group_id"] == "raw:SIGABRT"
 
 
 def test_triage_crashes_uses_gdb_mode_when_available(crashes_dir, make_executable, monkeypatch):

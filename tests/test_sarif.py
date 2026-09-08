@@ -44,8 +44,11 @@ def _sanitizer_record(
     }
 
 
-def _group(count, crashes, label="SIGSEGV"):
-    return label, {"count": count, "crashes": crashes}
+def _group(count, crashes, label="SIGSEGV", group_id=None):
+    data = {"count": count, "crashes": crashes}
+    if group_id is not None:
+        data["group_id"] = group_id
+    return label, data
 
 
 def _triage_with_groups(*groups):
@@ -85,6 +88,21 @@ def test_build_sarif_one_result_per_group():
     )
     data = sarif.build_sarif(triage, WEAK_ANALYSIS)
     assert len(data["runs"][0]["results"]) == 3
+
+
+def test_build_sarif_result_carries_group_fingerprint_and_difficulty():
+    triage = _triage_with_groups(
+        _group(2, [{"file": "c1", "size": 4}], label="SIGSEGV", group_id="hash:abc123"),
+    )
+    result = sarif.build_sarif(triage, WEAK_ANALYSIS)["runs"][0]["results"][0]
+    assert result["partialFingerprints"] == {"autofteGroupId/v1": "hash:abc123"}
+    assert result["properties"]["difficulty"] in ("Easy", "Medium", "Hard")
+
+
+def test_build_sarif_no_fingerprint_when_group_id_absent():
+    triage = _triage_with_groups(_group(1, [{"file": "c1", "size": 4}]))
+    result = sarif.build_sarif(triage, WEAK_ANALYSIS)["runs"][0]["results"][0]
+    assert "partialFingerprints" not in result
 
 
 def test_build_sarif_empty_groups_produces_empty_results():

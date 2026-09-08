@@ -474,7 +474,8 @@ def triage_crashes(
             entry["sanitizer"] = sanitizer_record
 
         bucket = groups.setdefault(
-            internal_key, {"label": label, "richness": richness, "entries": []}
+            internal_key,
+            {"label": label, "richness": richness, "entries": [], "key": internal_key},
         )
         if richness > bucket["richness"]:
             bucket["label"] = label
@@ -497,8 +498,10 @@ def triage_crashes(
             unique_label = f"{label} [{suffix}]"
             suffix += 1
         used_labels.add(unique_label)
+        kind, value = bucket["key"]
         final_groups[unique_label] = {
             "count": len(bucket["entries"]),
+            "group_id": f"{kind}:{value}",
             "crashes": sorted(bucket["entries"], key=lambda item: item["size"]),
         }
 
