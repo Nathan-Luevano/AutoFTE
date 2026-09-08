@@ -473,6 +473,48 @@ def test_cmd_pipeline_success_with_skip_llm(tmp_path, monkeypatch, capsys):
     assert "Done." not in out
 
 
+def test_cmd_pipeline_fail_on_difficulty_returns_gate_code(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    crashes = tmp_path / "crashes"
+    crashes.mkdir()
+    (crashes / "crash1").write_bytes(b"AAAA")
+
+    binary = tmp_path / "target"
+    binary.write_text("#!/bin/sh\nkill -SEGV $$\n")
+    binary.chmod(0o755)
+
+    source = tmp_path / "vuln.c"
+    source.write_text("int main(){return 0;}")
+
+    monkeypatch.setattr("autofte.triage.gdb_is_available", lambda debugger: False)
+    monkeypatch.setattr(cli, "analyze_binary", lambda path: {"exploit_mitigation_summary": {}})
+
+    rc = cli.main(
+        [
+            "pipeline",
+            str(binary),
+            str(source),
+            "--crashes-dir",
+            str(crashes),
+            "--skip-llm",
+            "--fail-on-difficulty",
+            "easy",
+            "--triage-json",
+            "triage.json",
+            "--binary-analysis",
+            "binary.json",
+            "--llm-analysis",
+            "llm.json",
+            "--summary-md",
+            "summary.md",
+            "--dashboard-dir",
+            "dashboard",
+        ]
+    )
+    assert rc == 2
+    assert "Severity gate failed" in capsys.readouterr().out
+
+
 def test_cmd_pipeline_sarif_flag_writes_sarif_alongside_markdown(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     crashes = tmp_path / "crashes"

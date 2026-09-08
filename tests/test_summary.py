@@ -1,4 +1,6 @@
-from autofte.summary import SCHEMA, build_summary
+import pytest
+
+from autofte.summary import SCHEMA, build_summary, groups_at_or_above
 
 
 def _triage():
@@ -94,6 +96,24 @@ def test_llm_section_extracts_known_keys():
     assert section["summary"] == "overflow"
     assert section["confidence"] == 0.8
     assert "ignored_key" not in section
+
+
+def test_groups_at_or_above_filters_by_exploitability():
+    summary = {
+        "groups": [
+            {"signature": "a", "difficulty": "Easy"},
+            {"signature": "b", "difficulty": "Medium"},
+            {"signature": "c", "difficulty": "Hard"},
+        ]
+    }
+    assert [g["signature"] for g in groups_at_or_above(summary, "easy")] == ["a"]
+    assert [g["signature"] for g in groups_at_or_above(summary, "medium")] == ["a", "b"]
+    assert len(groups_at_or_above(summary, "hard")) == 3
+
+
+def test_groups_at_or_above_rejects_unknown():
+    with pytest.raises(ValueError):
+        groups_at_or_above({"groups": []}, "nope")
 
 
 def test_empty_inputs():

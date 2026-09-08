@@ -233,6 +233,7 @@ autofte [COMMAND] [OPTIONS]
 - `--skip-llm`: Skip the LLM write-up phase entirely.
 - `--sarif PATH`: Write OASIS SARIF v2.1.0 log to specified path.
 - `--summary-json PATH`: Write a consolidated JSON summary (severity-ranked crash groups, binary posture, LLM notes) to specified path.
+- `--fail-on-difficulty {easy,medium,hard}`: Exit non-zero (code 2) if any crash group is at or above this exploit difficulty — a CI gate for fuzzing pipelines.
 - `--quiet`: Suppress per-file progress output.
 
 #### `autofte triage`
