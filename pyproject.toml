@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autofte"
-version = "0.2.1"
+version = "0.3.0"
 description = "Local-first crash triage, binary mitigation analysis, and LLM-assisted write-ups for fuzzing runs"
 readme = "PYPI.md"
 license = { file = "LICENSE" }

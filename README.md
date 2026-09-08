@@ -118,7 +118,7 @@ pip install autofte
 Pre-compiled single-file x86_64 Linux executables are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases):
 
 ```bash
-curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.2.1/autofte-linux-x86_64
+curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.3.0/autofte-linux-x86_64
 chmod +x autofte
 sudo mv autofte /usr/local/bin/
 ```
@@ -364,7 +364,7 @@ jobs:
 
       - name: Triage Crashes with AutoFTE
         id: autofte
-        uses: Nathan-Luevano/AutoFTE@v0.2.1
+        uses: Nathan-Luevano/AutoFTE@v0.3.0
         with:
           target-binary: "./examples/vuln-demo/target_asan"
           source-file: "examples/vuln-demo/vuln.c"

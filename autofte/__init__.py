@@ -1,3 +1,3 @@
 """AutoFTE: a local-first crash triage and binary analysis pipeline."""
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
