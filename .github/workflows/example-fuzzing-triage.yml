@@ -62,6 +62,10 @@ jobs:
           target-binary: ${{ inputs.target-binary }}
           crashes-dir: ${{ inputs.crashes-dir }}
           sarif-output: findings.sarif
+          summary-json: autofte-summary.json
+          # Uncomment to fail the build when an easily-exploitable crash
+          # group is found:
+          # fail-on-difficulty: easy
           # model / host are left unset here on purpose: most CI runners
           # have no local Ollama to reach, so the action falls back to
           # `--skip-llm` automatically. Point these at a self-hosted
@@ -72,6 +76,7 @@ jobs:
         run: |
           echo "Total crashes: ${{ steps.autofte.outputs.total-crash-count }}"
           echo "Distinct root causes: ${{ steps.autofte.outputs.unique-crash-count }}"
+          echo "Top group difficulty: ${{ steps.autofte.outputs.top-difficulty }}"
 
       - name: Upload SARIF as a build artifact too
         uses: actions/upload-artifact@v4
