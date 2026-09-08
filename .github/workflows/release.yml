@@ -3,16 +3,82 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v0.4.0). Must already exist and point at the commit to release."
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
+  guard:
+    name: Validate tag and run tests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve tag and version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          pyver="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')"
+          echo "version=${pyver}" >> "$GITHUB_OUTPUT"
+          if [ "${tag}" != "v${pyver}" ]; then
+            echo "::error::Tag '${tag}' does not match pyproject.toml version 'v${pyver}'."
+            exit 1
+          fi
+          initver="$(python3 -c 'import re; print(re.search(r"__version__\s*=\s*\"([^\"]+)\"", open("autofte/__init__.py").read()).group(1))')"
+          if [ "${initver}" != "${pyver}" ]; then
+            echo "::error::autofte/__init__.py version '${initver}' does not match pyproject.toml '${pyver}'."
+            exit 1
+          fi
+          if ! grep -q "^## \[${pyver}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${pyver}]' section."
+            exit 1
+          fi
+
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdb binutils
+
+      - name: Install with dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check autofte tests scripts
+
+      - name: Test
+        run: pytest -q
+
   publish-pypi:
     name: Build and publish to PyPI
+    needs: guard
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.tag }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,17 +91,29 @@ jobs:
       - name: Build sdist and wheel
         run: python -m build
 
+      - name: Check artifact version
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls dist
+          test -f "dist/autofte-${{ needs.guard.outputs.version }}.tar.gz"
+          test -f "dist/autofte-${{ needs.guard.outputs.version }}-py3-none-any.whl"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
   build-binary:
     name: Build and attach single-file binary
+    needs: guard
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.tag }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -50,10 +128,33 @@ jobs:
       - name: Build the single-file binary
         run: pyinstaller --noconfirm pyinstaller.spec
 
+      - name: Smoke-test the binary
+        run: ./dist/autofte --version
+
       - name: Rename binary with platform suffix
         run: mv dist/autofte dist/autofte-linux-x86_64
 
-      - name: Attach binary to the GitHub Release
+      - name: Extract changelog section for this version
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${{ needs.guard.outputs.version }}"
+          awk -v ver="$ver" '
+            $0 ~ "^## \\[" ver "\\]" {capture=1; next}
+            capture && /^## \[/ {exit}
+            capture {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "Release ${{ needs.guard.outputs.tag }}" > release-notes.md
+          fi
+          echo "Notes:"
+          cat release-notes.md
+
+      - name: Create GitHub Release and attach binary
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.guard.outputs.tag }}
+          name: ${{ needs.guard.outputs.tag }}
+          body_path: release-notes.md
           files: dist/autofte-linux-x86_64
