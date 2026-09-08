@@ -405,6 +405,50 @@ def test_cmd_llm_passes_severity_assessment_when_binary_analysis_present(
     assert assessment["difficulty"] in ("Easy", "Medium", "Hard")
 
 
+def test_cmd_llm_passes_disassembly_when_target_binary_present(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    triage = {
+        "groups": {
+            "g": {
+                "count": 1,
+                "crashes": [
+                    {
+                        "file": "c1",
+                        "sanitizer": {
+                            "bug_class": "stack-buffer-overflow",
+                            "access_type": "write",
+                            "crash_stack": [{"frame": 0, "func": "vuln", "addr": "0x1140"}],
+                        },
+                    }
+                ],
+            }
+        }
+    }
+    _write_json(tmp_path / "triage.json", triage)
+    (tmp_path / "target").write_bytes(b"\x7fELF fake")
+
+    monkeypatch.setattr(cli, "OllamaClient", _FakeLLMClient)
+    monkeypatch.setattr(cli.config, "resolve_host", lambda explicit: "http://x")
+    monkeypatch.setattr(cli.config, "resolve_model", lambda explicit, host: "fake-model")
+    monkeypatch.setattr(
+        cli.disasm, "disassemble_fault_context", lambda b, r, **k: "DISASM CONTEXT"
+    )
+
+    captured = {}
+
+    def fake_llm_analyze(client, triage_data, source_code, binary_analysis, **kwargs):
+        captured["disassembly"] = kwargs.get("disassembly")
+        return {"summary": "s"}
+
+    monkeypatch.setattr(cli, "llm_analyze", fake_llm_analyze)
+
+    rc = cli.main(
+        ["llm", "--triage-json", "triage.json", "--target-binary", "target", "--output", "o.json"]
+    )
+    assert rc == 0
+    assert captured["disassembly"] == "DISASM CONTEXT"
+
+
 def test_cmd_llm_missing_triage_file_errors(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     rc = cli.main(["llm", "--triage-json", "no-such.json"])

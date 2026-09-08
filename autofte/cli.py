@@ -19,7 +19,9 @@ from . import (
     __version__,
     bench,
     config,
+    crash_display,
     dashboard,
+    disasm,
     doctor,
     report,
     sarif,
@@ -127,23 +129,11 @@ def cmd_binscan(args):
 
 
 def _top_group_crash_record(triage_data):
-    """Return the first sanitizer crash record attached to the top (most
-    frequent) crash group, or `None` if that group has no sanitizer data --
-    the same walk `llm.py`'s own `_find_representative_crash_record` does
-    internally, kept as a small local copy here since it's also useful for
-    grounding the severity assessment fed into the LLM prompt.
-    """
     groups = triage_data.get("groups", {})
-    first_group = next(iter(groups.items()), None)
+    first_group = next(iter(groups.values()), None)
     if not first_group:
         return None
-
-    _label, data = first_group
-    for crash in data.get("crashes", []):
-        record = crash.get("sanitizer")
-        if record:
-            return record
-    return None
+    return crash_display.representative_crash_record(first_group)
 
 
 def cmd_llm(args):
@@ -173,15 +163,22 @@ def cmd_llm(args):
         print(message)
         return 1
 
+    crash_record = _top_group_crash_record(triage_data)
+
     severity_assessment = None
     if binary_analysis is not None:
-        severity_assessment = severity.assess_crash_difficulty(
-            binary_analysis, _top_group_crash_record(triage_data)
-        )
+        severity_assessment = severity.assess_crash_difficulty(binary_analysis, crash_record)
+
+    disassembly = None
+    target_binary = getattr(args, "target_binary", None)
+    if target_binary and Path(target_binary).exists():
+        disassembly = disasm.disassemble_fault_context(target_binary, crash_record)
 
     quiet = getattr(args, "quiet", False)
     if not quiet:
         print(f"Using model: {model}")
+        if disassembly:
+            print("Grounding with disassembly around the faulting instruction")
     try:
         result = llm_analyze(
             client,
@@ -189,6 +186,7 @@ def cmd_llm(args):
             source_code,
             binary_analysis,
             severity_assessment=severity_assessment,
+            disassembly=disassembly,
         )
     except LLMResponseError as exc:
         print(f"Error: {exc}")
@@ -427,6 +425,7 @@ def cmd_pipeline(args):
     if not args.skip_llm:
         llm_ns = argparse.Namespace(
             triage_json=args.triage_json,
+            target_binary=args.target_binary,
             source_file=args.source_file if Path(args.source_file).exists() else None,
             binary_analysis=args.binary_analysis,
             output=args.llm_analysis,
@@ -781,6 +780,11 @@ def build_parser():
 
     p_llm = subparsers.add_parser("llm", help="Ask a local Ollama model for a short write-up")
     p_llm.add_argument("--triage-json", default="crash_triage.json")
+    p_llm.add_argument(
+        "--target-binary",
+        default="./target",
+        help="Target binary, disassembled around the fault to ground the write-up",
+    )
     p_llm.add_argument("--source-file")
     p_llm.add_argument("--binary-analysis", default="binary_analysis.json")
     p_llm.add_argument("--output", default="llm_analysis.json")
