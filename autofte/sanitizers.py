@@ -63,6 +63,17 @@ LSAN_ASAN_SUMMARY_RE = re.compile(r"SUMMARY: AddressSanitizer:.*leaked")
 LSAN_LEAK_SIZE_RE = re.compile(r"(Direct|Indirect) leak of (\d+) byte\(s\) in (\d+) object\(s\)")
 
 
+def _collect_frames_after(text, start, frame_parser):
+    frames = []
+    for raw_line in text[start:].splitlines():
+        frame = frame_parser(raw_line)
+        if frame is not None:
+            frames.append(frame)
+        elif frames:
+            break
+    return frames
+
+
 def detect_sanitizer_output(text):
     if not text:
         return None
@@ -231,14 +242,7 @@ def parse_ubsan(text):
 
     file_name, line_number, _col, message = match.groups()
 
-    crash_stack = []
-    tail = text[match.end():]
-    for raw_line in tail.splitlines():
-        frame = _parse_asan_frame(raw_line)
-        if frame is not None:
-            crash_stack.append(frame)
-        elif crash_stack:
-            break
+    crash_stack = _collect_frames_after(text, match.end(), _parse_asan_frame)
 
     if not crash_stack:
         crash_stack = [
@@ -307,14 +311,7 @@ def parse_msan(text):
         return None
 
     bug_class = marker.group(1).strip().split()[0].rstrip(":")
-
-    crash_stack = []
-    for raw_line in text[marker.end():].splitlines():
-        frame = _parse_asan_frame(raw_line)
-        if frame is not None:
-            crash_stack.append(frame)
-        elif crash_stack:
-            break
+    crash_stack = _collect_frames_after(text, marker.end(), _parse_asan_frame)
 
     return {
         "sanitizer": "MemorySanitizer",
@@ -358,13 +355,7 @@ def parse_tsan(text):
         access_type = access_match.group(1).lower().split()[-1]
         access_size = int(access_match.group(2))
 
-    crash_stack = []
-    for raw_line in text[marker.end():].splitlines():
-        frame = _parse_tsan_frame(raw_line)
-        if frame is not None:
-            crash_stack.append(frame)
-        elif crash_stack:
-            break
+    crash_stack = _collect_frames_after(text, marker.end(), _parse_tsan_frame)
 
     return {
         "sanitizer": "ThreadSanitizer",
