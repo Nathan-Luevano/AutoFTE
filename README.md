@@ -10,7 +10,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-520%20passing-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/tests-547%20passing-brightgreen.svg)](tests/)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C / C++](https://img.shields.io/badge/C%20%2F%20C%2B%2B-00599C?logo=c%2B%2B&logoColor=white)](https://en.wikipedia.org/wiki/C%2B%2B)
