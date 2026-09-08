@@ -304,6 +304,12 @@ class BinaryAnalyzer:
         else:
             vulnerable_areas.append("No PIE - fixed code addresses")
 
+        if self.protections.get("fortify", {}).get("enabled"):
+            protection_count += 0.5
+            techniques.append("FORTIFY_SOURCE checks on hardened libc calls")
+        else:
+            vulnerable_areas.append("No FORTIFY_SOURCE - unhardened libc calls")
+
         relro_status = self.protections.get("relro", {}).get("status", "")
         if relro_status == "Full RELRO":
             protection_count += 1

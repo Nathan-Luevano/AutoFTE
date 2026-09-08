@@ -339,12 +339,13 @@ def test_summarize_mitigations_all_protections_high():
         "nx_bit": {"enabled": True},
         "stack_canaries": {"enabled": True},
         "pie": {"enabled": True},
+        "fortify": {"enabled": True},
         "relro": {"status": "Full RELRO"},
     }
     summary = analyzer._summarize_mitigations()
     assert summary["protection_level"] == "High"
     assert summary["exploit_difficulty"] == "Hard"
-    assert summary["protection_count"] == 5
+    assert summary["protection_count"] == 5.5
     assert summary["vulnerable_areas"] == []
 
 
@@ -355,14 +356,31 @@ def test_summarize_mitigations_none_low():
         "nx_bit": {"enabled": False},
         "stack_canaries": {"enabled": False},
         "pie": {"enabled": False},
+        "fortify": {"enabled": False},
         "relro": {"status": "No RELRO"},
     }
     summary = analyzer._summarize_mitigations()
     assert summary["protection_level"] == "Low"
     assert summary["exploit_difficulty"] == "Easy"
     assert summary["protection_count"] == 0
-    assert len(summary["vulnerable_areas"]) == 5
+    assert len(summary["vulnerable_areas"]) == 6
     assert summary["recommended_approach"] == "Direct exploitation possible - minimal protections"
+
+
+def test_summarize_mitigations_fortify_counts_half_and_adds_technique():
+    analyzer = BinaryAnalyzer("bin")
+    analyzer.protections = {
+        "aslr_system": {"enabled": False},
+        "nx_bit": {"enabled": False},
+        "stack_canaries": {"enabled": False},
+        "pie": {"enabled": False},
+        "fortify": {"enabled": True},
+        "relro": {"status": "No RELRO"},
+    }
+    summary = analyzer._summarize_mitigations()
+    assert summary["protection_count"] == 0.5
+    assert any("FORTIFY_SOURCE" in t for t in summary["required_techniques"])
+    assert not any("No FORTIFY_SOURCE" in v for v in summary["vulnerable_areas"])
 
 
 def test_summarize_mitigations_partial_relro_counts_half():
