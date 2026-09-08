@@ -228,6 +228,7 @@ autofte [COMMAND] [OPTIONS]
 - `source_file`: Path to primary C/C++ source file (default: `vuln.c`).
 - `--crashes-dir DIR`: Directory containing crash inputs (default: auto-detected in `out/default/crashes`, `out/crashes`, or `crashes`).
 - `--debugger {gdb}`: Debugger backend (default: `gdb`).
+- `--reproduction-runs N`: Times to re-run each crashing input to gauge reproducibility (default: 5; `1` disables verification for speed).
 - `--model MODEL`: Ollama model name.
 - `--host URL`: Ollama host URL.
 - `--llm-timeout SEC`: Ollama request timeout in seconds.
@@ -242,6 +243,7 @@ autofte [COMMAND] [OPTIONS]
 - `--crashes-dir DIR`: Directory of crash files to triage.
 - `--output PATH`: Path for output JSON (default: `crash_triage.json`).
 - `--debugger {gdb}`: Debugger backend (default: `gdb`).
+- `--reproduction-runs N`: Times to re-run each crashing input to gauge reproducibility (default: 5; `1` disables verification for speed).
 - `--quiet`: Suppress per-file progress output.
 
 #### `autofte binscan`

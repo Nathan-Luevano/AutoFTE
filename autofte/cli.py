@@ -748,6 +748,15 @@ def build_parser():
     p_triage.add_argument("--output", default="crash_triage.json")
     p_triage.add_argument("--debugger", default="gdb")
     p_triage.add_argument("--quiet", action="store_true", help="Suppress per-file progress output")
+    p_triage.add_argument(
+        "--reproduction-runs",
+        type=int,
+        default=DEFAULT_REPRODUCTION_RUNS,
+        help=(
+            "Times to re-run each crashing input to gauge reproducibility "
+            f"(default {DEFAULT_REPRODUCTION_RUNS}); 1 disables verification for speed"
+        ),
+    )
     p_triage.set_defaults(func=cmd_triage)
 
     p_binscan = subparsers.add_parser(
@@ -889,6 +898,15 @@ def build_parser():
         "--skip-llm", action="store_true", help="Skip the LLM write-up step entirely"
     )
     p_pipeline.add_argument("--quiet", action="store_true")
+    p_pipeline.add_argument(
+        "--reproduction-runs",
+        type=int,
+        default=DEFAULT_REPRODUCTION_RUNS,
+        help=(
+            "Times to re-run each crashing input to gauge reproducibility "
+            f"(default {DEFAULT_REPRODUCTION_RUNS}); 1 disables verification for speed"
+        ),
+    )
     p_pipeline.add_argument("--triage-json", default="crash_triage.json")
     p_pipeline.add_argument("--binary-analysis", default="binary_analysis.json")
     p_pipeline.add_argument("--llm-analysis", default="llm_analysis.json")

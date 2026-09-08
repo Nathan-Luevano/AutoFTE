@@ -207,6 +207,26 @@ def test_cmd_doctor_json_output(monkeypatch, capsys):
     assert "ollama_reachable" in payload
 
 
+def test_cmd_triage_reproduction_runs_flag_forwarded(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    crashes = tmp_path / "crashes"
+    crashes.mkdir()
+    (crashes / "c1").write_bytes(b"A")
+
+    seen = {}
+
+    def fake_triage(crashes_dir, target_binary, **kwargs):
+        seen.update(kwargs)
+        return {"triage_mode": "empty", "groups": {}, "total_crashes": 0, "unique_crash_frames": 0}
+
+    monkeypatch.setattr(cli, "triage_crashes", fake_triage)
+    rc = cli.main(
+        ["triage", "--crashes-dir", str(crashes), "--reproduction-runs", "1", "--quiet"]
+    )
+    assert rc == 0
+    assert seen["reproduction_runs"] == 1
+
+
 def test_main_version_flag(capsys):
     with pytest.raises(SystemExit) as exc_info:
         cli.main(["--version"])
