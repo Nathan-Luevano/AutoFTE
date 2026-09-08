@@ -14,7 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import bench, config, dashboard, doctor, report, sarif, severity
+from . import bench, config, dashboard, doctor, report, sarif, severity, summary
 from .binary_analysis import analyze_binary
 from .io_utils import load_json, write_json
 from .llm import LLMResponseError, OllamaClient
@@ -199,6 +199,13 @@ def cmd_report(args):
         write_json(
             args.output,
             sarif.build_sarif(triage, binary_data, llm_data, args.target_binary),
+        )
+    elif args.format == "json":
+        write_json(
+            args.output,
+            summary.build_summary(
+                args.target_binary, args.source_file, triage, binary_data, llm_data
+            ),
         )
     else:
         text = report.build_report(
@@ -418,6 +425,19 @@ def cmd_pipeline(args):
         )
         cmd_report(sarif_ns)
 
+    if getattr(args, "summary_json", None):
+        summary_ns = argparse.Namespace(
+            target_binary=args.target_binary,
+            source_file=args.source_file,
+            triage_json=args.triage_json,
+            binary_analysis=args.binary_analysis,
+            llm_analysis=args.llm_analysis,
+            output=args.summary_json,
+            format="json",
+            quiet=args.quiet,
+        )
+        cmd_report(summary_ns)
+
     if args.quiet:
         return 0
 
@@ -429,6 +449,8 @@ def cmd_pipeline(args):
     print(f"  Dashboard: {args.dashboard_dir}/index.html")
     if args.sarif:
         print(f"  SARIF: {args.sarif}")
+    if getattr(args, "summary_json", None):
+        print(f"  JSON summary: {args.summary_json}")
     return 0
 
 
@@ -689,9 +711,12 @@ def build_parser():
     p_report.add_argument("--output", default="analysis_summary.md")
     p_report.add_argument(
         "--format",
-        choices=("markdown", "sarif"),
+        choices=("markdown", "sarif", "json"),
         default="markdown",
-        help="Output format: a markdown summary (default) or a SARIF 2.1.0 log",
+        help=(
+            "Output format: a markdown summary (default), a SARIF 2.1.0 log, "
+            "or a consolidated JSON summary"
+        ),
     )
     p_report.set_defaults(func=cmd_report)
 
@@ -772,6 +797,10 @@ def build_parser():
     p_pipeline.add_argument(
         "--sarif",
         help="Also write a SARIF 2.1.0 log to this path (off by default)",
+    )
+    p_pipeline.add_argument(
+        "--summary-json",
+        help="Also write a consolidated JSON summary to this path (off by default)",
     )
     p_pipeline.set_defaults(func=cmd_pipeline)
 
