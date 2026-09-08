@@ -425,6 +425,18 @@ def cmd_pipeline(args):
         )
         cmd_report(sarif_ns)
 
+    fail_on = getattr(args, "fail_on_difficulty", None)
+    gate_hits = []
+    if fail_on:
+        gate_summary = summary.build_summary(
+            args.target_binary,
+            args.source_file,
+            load_json(args.triage_json),
+            load_json(args.binary_analysis),
+            load_json(args.llm_analysis),
+        )
+        gate_hits = summary.groups_at_or_above(gate_summary, fail_on)
+
     if getattr(args, "summary_json", None):
         summary_ns = argparse.Namespace(
             target_binary=args.target_binary,
@@ -437,6 +449,17 @@ def cmd_pipeline(args):
             quiet=args.quiet,
         )
         cmd_report(summary_ns)
+
+    if fail_on and gate_hits:
+        if not args.quiet:
+            print(
+                f"\nSeverity gate failed: {len(gate_hits)} crash group(s) at or above "
+                f"'{fail_on}' exploit difficulty:"
+            )
+            for group in gate_hits:
+                print(f"  - {group.get('bug_class_label') or group['signature']} "
+                      f"({group['difficulty']}, confidence {group['confidence']})")
+        return 2
 
     if args.quiet:
         return 0
@@ -801,6 +824,11 @@ def build_parser():
     p_pipeline.add_argument(
         "--summary-json",
         help="Also write a consolidated JSON summary to this path (off by default)",
+    )
+    p_pipeline.add_argument(
+        "--fail-on-difficulty",
+        choices=("easy", "medium", "hard"),
+        help="Exit non-zero if any crash group is at or above this exploit difficulty",
     )
     p_pipeline.set_defaults(func=cmd_pipeline)
 

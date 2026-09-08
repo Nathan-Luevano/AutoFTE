@@ -4,6 +4,19 @@ from . import crash_display, severity
 
 SCHEMA = "autofte-summary/1"
 
+_DIFFICULTY_EXPLOITABILITY = {"Easy": 3, "Medium": 2, "Hard": 1}
+
+
+def groups_at_or_above(summary, difficulty):
+    threshold = _DIFFICULTY_EXPLOITABILITY.get(difficulty.capitalize())
+    if threshold is None:
+        raise ValueError(f"unknown difficulty: {difficulty}")
+    return [
+        group
+        for group in summary.get("groups", [])
+        if _DIFFICULTY_EXPLOITABILITY.get(group.get("difficulty"), 0) >= threshold
+    ]
+
 _PROTECTION_KEYS = (
     ("aslr_system", "aslr"),
     ("nx_bit", "nx"),
