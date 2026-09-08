@@ -196,6 +196,24 @@ def test_cmd_doctor_end_to_end(monkeypatch, capsys):
     assert "AutoFTE environment check" in out
 
 
+def test_cmd_doctor_json_output(monkeypatch, capsys):
+    monkeypatch.setattr(cli.doctor.shutil, "which", lambda tool: None)
+    monkeypatch.setattr(cli.doctor.config, "list_installed_models", lambda host: [])
+
+    rc = cli.main(["doctor", "--json"])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["required_tools"]["readelf"] is False
+    assert "ollama_reachable" in payload
+
+
+def test_main_version_flag(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["--version"])
+    assert exc_info.value.code == 0
+    assert "autofte" in capsys.readouterr().out
+
+
 def test_cmd_triage_missing_crashes_dir_returns_error(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     rc = cli.main(

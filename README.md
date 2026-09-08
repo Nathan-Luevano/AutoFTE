@@ -210,7 +210,7 @@ autofte [COMMAND] [OPTIONS]
 | `summary` | `autofte summary [options]` | Prints a severity-ranked crash-group table (or JSON with `--json`) from analysis artifacts. |
 | `dashboard` | `autofte dashboard [options]` | Renders the static HTML dashboard from JSON artifacts. |
 | `crash-info` | `autofte crash-info [file]` | Inspects file size, type, and hex preview of a single crash payload. |
-| `doctor` | `autofte doctor [options]` | Audits system dependencies and reporting tool availability. |
+| `doctor` | `autofte doctor [options]` | Audits system dependencies and reporting tool availability (`--json` for machine-readable output). |
 | `bench` | `autofte bench [options]` | Evaluates deduplication accuracy against labeled ground-truth datasets. |
 
 ### Command Options

@@ -6,6 +6,7 @@ pipeline.sh did.
 """
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -14,7 +15,17 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import bench, config, dashboard, doctor, report, sarif, severity, summary
+from . import (
+    __version__,
+    bench,
+    config,
+    dashboard,
+    doctor,
+    report,
+    sarif,
+    severity,
+    summary,
+)
 from .binary_analysis import analyze_binary
 from .io_utils import load_json, write_json
 from .llm import LLMResponseError, OllamaClient
@@ -304,6 +315,9 @@ def _latest_crash_file():
 
 def cmd_doctor(args):
     report_data = doctor.check_environment(args.host)
+    if getattr(args, "json", False):
+        print(json.dumps(report_data, indent=2))
+        return 0
     print(doctor.format_report(report_data))
     return 0
 
@@ -716,6 +730,9 @@ def build_parser():
     parser = argparse.ArgumentParser(
         prog="autofte", description="Local crash triage and binary analysis pipeline"
     )
+    parser.add_argument(
+        "--version", action="version", version=f"autofte {__version__}"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     p_triage = subparsers.add_parser("triage", help="Group crash files by debugger frame or signal")
@@ -806,6 +823,9 @@ def build_parser():
         "doctor", help="Check which required/optional tools are installed"
     )
     p_doctor.add_argument("--host", help="Ollama host to check")
+    p_doctor.add_argument(
+        "--json", action="store_true", help="Print the environment report as JSON"
+    )
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_bench = subparsers.add_parser(
