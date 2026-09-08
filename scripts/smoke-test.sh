@@ -211,6 +211,30 @@ else
     cat "$WORKDIR/pipeline.log"
 fi
 
+EMPTY_LLM_JSON="$WORKDIR/empty-llm.json"
+echo '{}' >"$EMPTY_LLM_JSON"
+
+step "autofte summary --format json"
+SUMMARY_JSON="$WORKDIR/summary.json"
+if autofte summary --triage-json "$TRIAGE_JSON" --binary-analysis "$BINSCAN_JSON" \
+    --llm-analysis "$EMPTY_LLM_JSON" --format json --output "$SUMMARY_JSON" \
+    >"$WORKDIR/summary.log" 2>&1; then
+    require_file "$SUMMARY_JSON" "summary JSON" && \
+        require_substring "$(cat "$SUMMARY_JSON")" "autofte-summary/1" "summary schema" && ok
+else
+    fail "autofte summary exited non-zero"
+    cat "$WORKDIR/summary.log"
+fi
+
+step "autofte summary (table)"
+if SUMMARY_TABLE=$(autofte summary --triage-json "$TRIAGE_JSON" \
+    --binary-analysis "$BINSCAN_JSON" --llm-analysis "$EMPTY_LLM_JSON" 2>&1); then
+    require_substring "$SUMMARY_TABLE" "DIFFICULTY" "summary table header" && ok
+else
+    fail "autofte summary (table) exited non-zero"
+    echo "$SUMMARY_TABLE"
+fi
+
 # 7. Dashboard generation directly, off the triage/binscan artifacts from
 # step 4, to isolate dashboard.py from the pipeline/demo wrappers.
 step "autofte dashboard"
