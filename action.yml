@@ -63,6 +63,16 @@ inputs:
     description: "Whether to upload the SARIF log to GitHub code scanning."
     required: false
     default: "true"
+  summary-json:
+    description: "Path to write the consolidated JSON summary to."
+    required: false
+    default: "autofte-summary.json"
+  fail-on-difficulty:
+    description: >-
+      If set to easy, medium, or hard, the action fails when any crash
+      group is at or above that exploit difficulty.
+    required: false
+    default: ""
 
 outputs:
   sarif-path:
@@ -74,6 +84,12 @@ outputs:
   total-crash-count:
     description: "Total number of crash files triaged."
     value: ${{ steps.pipeline.outputs.total-crash-count }}
+  summary-json-path:
+    description: "Path to the consolidated JSON summary written by this action."
+    value: ${{ steps.pipeline.outputs.summary-json-path }}
+  top-difficulty:
+    description: "Exploit difficulty of the highest-ranked crash group."
+    value: ${{ steps.pipeline.outputs.top-difficulty }}
 
 runs:
   using: "composite"
@@ -114,7 +130,11 @@ runs:
         args+=(
           --crashes-dir "${{ inputs.crashes-dir }}"
           --sarif "${{ inputs.sarif-output }}"
+          --summary-json "${{ inputs.summary-json }}"
         )
+        if [ -n "${{ inputs.fail-on-difficulty }}" ]; then
+          args+=(--fail-on-difficulty "${{ inputs.fail-on-difficulty }}")
+        fi
 
         if [ -n "${{ inputs.model }}" ] || [ -n "${{ inputs.host }}" ]; then
           if [ -n "${{ inputs.model }}" ]; then
@@ -127,9 +147,13 @@ runs:
           args+=(--skip-llm)
         fi
 
+        set +e
         autofte pipeline "${args[@]}"
+        pipeline_rc=$?
+        set -e
 
         echo "sarif-path=${{ inputs.sarif-output }}" >> "$GITHUB_OUTPUT"
+        echo "summary-json-path=${{ inputs.summary-json }}" >> "$GITHUB_OUTPUT"
 
         if [ -f crash_triage.json ]; then
           total=$(python3 -c "import json; print(json.load(open('crash_triage.json')).get('total_crashes', ''))" 2>/dev/null || true)
@@ -137,6 +161,13 @@ runs:
           echo "total-crash-count=${total}" >> "$GITHUB_OUTPUT"
           echo "unique-crash-count=${unique}" >> "$GITHUB_OUTPUT"
         fi
+
+        if [ -f "${{ inputs.summary-json }}" ]; then
+          top=$(python3 -c "import json; g=json.load(open('${{ inputs.summary-json }}')).get('top_group') or {}; print(g.get('difficulty', ''))" 2>/dev/null || true)
+          echo "top-difficulty=${top}" >> "$GITHUB_OUTPUT"
+        fi
+
+        exit $pipeline_rc
 
     - name: Upload SARIF to code scanning
       if: ${{ inputs.upload-sarif == 'true' }}
