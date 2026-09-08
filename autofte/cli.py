@@ -26,6 +26,7 @@ from . import (
     report,
     sarif,
     severity,
+    source_context,
     summary,
 )
 from .binary_analysis import analyze_binary
@@ -142,9 +143,6 @@ def cmd_llm(args):
         return 1
 
     triage_data = load_json(args.triage_json)
-    source_code = None
-    if args.source_file and Path(args.source_file).exists():
-        source_code = Path(args.source_file).read_text(encoding="utf-8")
     binary_analysis = None
     if Path(args.binary_analysis).exists():
         binary_analysis = load_json(args.binary_analysis)
@@ -164,6 +162,10 @@ def cmd_llm(args):
         return 1
 
     crash_record = _top_group_crash_record(triage_data)
+
+    source_code = None
+    if args.source_file and Path(args.source_file).exists():
+        source_code = source_context.extract_context(args.source_file, crash_record)
 
     severity_assessment = None
     if binary_analysis is not None:
