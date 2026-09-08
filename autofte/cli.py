@@ -357,6 +357,14 @@ def cmd_bench(args):
         bench.write_results(args.json, result)
         print(f"\nSaved results to {args.json}")
 
+    if getattr(args, "csv", None):
+        csv_text = bench.render_per_target_csv(result)
+        if csv_text:
+            Path(args.csv).write_text(csv_text, encoding="utf-8")
+            print(f"\nSaved per-target CSV to {args.csv}")
+        else:
+            print("\nNo per-target metrics to write as CSV (igor corpus only)")
+
     baseline = None
     if args.baseline:
         try:
@@ -878,6 +886,7 @@ def build_parser():
     )
     p_bench.add_argument("--baseline", help="Path to a bench-results.json to diff against")
     p_bench.add_argument("--json", help="Write full results to this path")
+    p_bench.add_argument("--csv", help="Write the per-target metrics table to this path as CSV")
     p_bench.add_argument(
         "--fail-under-f", type=float, help="Exit non-zero if f_measure is below this value"
     )

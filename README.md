@@ -255,6 +255,7 @@ autofte [COMMAND] [OPTIONS]
 - `--per-target`: Print detailed metrics table for each target individually (for `igor` corpus).
 - `--baseline PATH`: Path to a `bench-results.json` to diff against.
 - `--json PATH`: Export full benchmark metrics to JSON.
+- `--csv PATH`: Export the per-target metrics table as CSV (igor corpus only).
 - `--fail-under-f FLOAT`: Exit non-zero if F-measure falls below this threshold.
 - `--fail-purity-drop FLOAT`: Exit non-zero if purity drops by more than this percentage against baseline (default: `2.0`).
 

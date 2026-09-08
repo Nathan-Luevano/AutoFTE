@@ -310,6 +310,26 @@ def test_render_per_target_table_sorts_worst_f_measure_first(tmp_path):
     assert alpha_pos < beta_pos  # worse f_measure (alpha) listed before beta
 
 
+def test_render_per_target_csv_has_header_and_rows(tmp_path):
+    corpus = tmp_path / "data_sources"
+    alpha_dir = corpus / "vendor__alpha" / "asan_logs" / "poc_A_raw"
+    alpha_dir.mkdir(parents=True)
+    (alpha_dir / "a1.bin").write_text(_asan_report(1, "func_one", 10))
+    (alpha_dir / "a2.bin").write_text(_asan_report(2, "func_two", 20))
+
+    result = bench.run_bench(corpus, "igor")
+    csv_text = bench.render_per_target_csv(result)
+
+    lines = csv_text.strip().splitlines()
+    assert lines[0] == "target,n_items,n_labels,n_buckets,purity,inverse_purity,f_measure"
+    assert any(line.startswith("vendor__alpha,") for line in lines[1:])
+
+
+def test_render_per_target_csv_empty_for_micro_result():
+    result = bench.run_bench(bench.MICRO_CORPUS_DIR, "micro")
+    assert bench.render_per_target_csv(result) == ""
+
+
 def test_render_per_target_table_reports_none_for_micro_result():
     result = bench.run_bench(bench.MICRO_CORPUS_DIR, "micro")
 

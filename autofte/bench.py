@@ -335,6 +335,30 @@ def render_per_target_table(result):
     return "\n".join(lines)
 
 
+def render_per_target_csv(result):
+    per_target = result.get("per_target")
+    if not per_target:
+        return ""
+    columns = (
+        "target",
+        "n_items",
+        "n_labels",
+        "n_buckets",
+        "purity",
+        "inverse_purity",
+        "f_measure",
+    )
+    rows = [",".join(columns)]
+    for target, metrics in sorted(per_target.items(), key=lambda kv: kv[1]["f_measure"]):
+        rows.append(
+            ",".join(
+                str(metrics[column]) if column != "target" else target
+                for column in columns
+            )
+        )
+    return "\n".join(rows) + "\n"
+
+
 def render_aggregation_table(result):
     """Print micro (pooled) and macro (per-target mean) purity/IP/F side by
     side, labelled, with a one-line note on which one the published
