@@ -48,14 +48,24 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data, max_
             [
                 "## Crash groups",
                 "",
-                "Ranked by crash count. Groups are collapsed via major/minor "
+                "Ranked by crash-aware exploit difficulty (most severe first), with "
+                "crash count breaking ties. Groups are collapsed via major/minor "
                 "stack-hash dedup (plus sanitizer bug class, when available) -- "
                 "not raw signature matching -- so `unique_crash_frames` above is "
                 "the true distinct-bug count, not the crash count.",
                 "",
             ]
         )
-        for index, (frame, data) in enumerate(list(groups.items())[:max_groups], start=1):
+        ranked = []
+        for frame, data in groups.items():
+            crash_record = crash_display.representative_crash_record(data)
+            assessment = severity.assess_crash_difficulty(binary_data, crash_record)
+            ranked.append((assessment["score"], -data.get("count", 0), frame, data, assessment))
+        ranked.sort(key=lambda item: (item[0], item[1]))
+
+        for index, (_score, _neg, frame, data, assessment) in enumerate(
+            ranked[:max_groups], start=1
+        ):
             sample = data.get("crashes", [{}])[0]
             count = data.get("count", 0)
             crash_record = crash_display.representative_crash_record(data)
@@ -67,7 +77,6 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data, max_
                 lines.append(f"- Signature: `{frame}`")
             lines.append(f"- Sample crash file: `{sample.get('file', 'n/a')}`")
 
-            assessment = severity.assess_crash_difficulty(binary_data, crash_record)
             lines.append(
                 f"- Difficulty: **{assessment['difficulty']}** "
                 f"(confidence {assessment['confidence']:.2f})"

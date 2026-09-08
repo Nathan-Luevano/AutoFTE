@@ -109,6 +109,34 @@ def test_build_report_limits_to_five_groups():
     assert shown == 5
 
 
+def test_build_report_groups_ordered_by_severity():
+    triage = {
+        "total_crashes": 2,
+        "unique_crash_frames": 2,
+        "groups": {
+            "null-deref": {
+                "count": 9,
+                "crashes": [{"file": "c1", "sanitizer": {"bug_class": "null-pointer-dereference"}}],
+            },
+            "stack-smash": {
+                "count": 1,
+                "crashes": [
+                    {
+                        "file": "c2",
+                        "sanitizer": {
+                            "bug_class": "stack-buffer-overflow",
+                            "access_type": "write",
+                        },
+                    }
+                ],
+            },
+        },
+    }
+    text = build_report("./target", "vuln.c", triage, {}, {})
+    assert text.index("stack-buffer-overflow") < text.index("null-pointer-dereference")
+    assert "### 1. stack-buffer-overflow" in text
+
+
 def test_build_report_max_groups_override():
     groups = {f"SIG{i}": {"count": 1, "crashes": [{"file": f"c{i}", "size": 1}]} for i in range(8)}
     triage = {"total_crashes": 8, "unique_crash_frames": 8, "groups": groups}
