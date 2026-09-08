@@ -10,11 +10,11 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-547%20passing-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/tests-548%20passing-brightgreen.svg)](tests/)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C / C++](https://img.shields.io/badge/C%20%2F%20C%2B%2B-00599C?logo=c%2B%2B&logoColor=white)](https://en.wikipedia.org/wiki/C%2B%2B)
-[![Sanitizers](https://img.shields.io/badge/ASan%20%2F%20UBSan-2E8B57)](https://github.com/google/sanitizers)
+[![Sanitizers](https://img.shields.io/badge/ASan%20%C2%B7%20UBSan%20%C2%B7%20LSan%20%C2%B7%20MSan%20%C2%B7%20TSan-2E8B57)](https://github.com/google/sanitizers)
 [![AFL++](https://img.shields.io/badge/AFL%2B%2B-Fuzzing-4B0082)](https://github.com/AFLplusplus/AFLplusplus)
 [![GDB](https://img.shields.io/badge/GDB-Debugger-808080)](https://www.sourceware.org/gdb/)
 [![Binutils](https://img.shields.io/badge/GNU%20Binutils-ELF%20Analysis-333333)](https://www.gnu.org/software/binutils/)
