@@ -170,6 +170,9 @@ BUG_CLASS_FAMILY = {
     "signed-integer-overflow": "integer-overflow",
     "unsigned-integer-overflow": "integer-overflow",
     "undefined-behavior": "ub",
+    "memory-leak": "memory-leak",
+    "use-of-uninitialized-value": "uninitialized",
+    "data-race": "data-race",
 }
 
 _BUG_TYPE_FAMILY_KEYWORDS = (
@@ -194,6 +197,9 @@ _BUG_TYPE_FAMILY_KEYWORDS = (
     ("misaligned", ("misaligned",)),
     ("shift-oob", ("shift exponent", "shift amount", "shift-out-of-bounds")),
     ("segv", ("segv", "segmentation fault", "seg fault")),
+    ("memory-leak", ("memory leak", "memory-leak", "leaked memory")),
+    ("uninitialized", ("uninitialized", "uninitialised", "use of uninitialized")),
+    ("data-race", ("data race", "data-race", "race condition")),
 )
 
 _WEAPONIZATION_PATTERNS = (

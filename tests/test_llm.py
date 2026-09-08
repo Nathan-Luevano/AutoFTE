@@ -10,7 +10,9 @@ from autofte.llm import (
     EvidenceLedger,
     LLMResponseError,
     OllamaClient,
+    _bug_class_family,
     _evidence_completeness,
+    _normalize_bug_type_family,
     analyze,
     build_prompt,
     extract_json,
@@ -728,6 +730,30 @@ def test_analyze_raises_after_two_failed_attempts():
     with pytest.raises(LLMResponseError, match="after one retry"):
         analyze(client, _triage_data_with_sanitizer_record())
     assert len(client.calls) == 2
+
+
+@pytest.mark.parametrize(
+    "bug_class,family",
+    [
+        ("memory-leak", "memory-leak"),
+        ("use-of-uninitialized-value", "uninitialized"),
+        ("data-race", "data-race"),
+    ],
+)
+def test_new_sanitizer_bug_classes_have_families(bug_class, family):
+    assert _bug_class_family(bug_class) == family
+
+
+@pytest.mark.parametrize(
+    "text,family",
+    [
+        ("this is a memory leak", "memory-leak"),
+        ("use of uninitialized value", "uninitialized"),
+        ("a data race between threads", "data-race"),
+    ],
+)
+def test_new_sanitizer_bug_type_keywords_normalize(text, family):
+    assert _normalize_bug_type_family(text) == family
 
 
 def test_analyze_substitutes_contradicted_bug_class():
