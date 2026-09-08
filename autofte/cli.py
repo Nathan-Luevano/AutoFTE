@@ -264,8 +264,13 @@ def cmd_summary(args):
         load_json(args.binary_analysis),
         load_json(args.llm_analysis),
     )
-    if args.json:
+    if args.format == "json":
         write_json(args.output, data)
+        if not getattr(args, "quiet", False):
+            print(f"Wrote {args.output}")
+        return 0
+    if args.format == "csv":
+        Path(args.output).write_text(summary.render_csv(data), encoding="utf-8")
         if not getattr(args, "quiet", False):
             print(f"Wrote {args.output}")
         return 0
@@ -824,8 +829,15 @@ def build_parser():
     p_summary.add_argument("--triage-json", default="crash_triage.json")
     p_summary.add_argument("--binary-analysis", default="binary_analysis.json")
     p_summary.add_argument("--llm-analysis", default="llm_analysis.json")
-    p_summary.add_argument("--json", action="store_true", help="Write JSON instead of a table")
-    p_summary.add_argument("--output", default="summary.json")
+    p_summary.add_argument(
+        "--format",
+        choices=("table", "json", "csv"),
+        default="table",
+        help="Output format: terminal table (default), JSON, or CSV",
+    )
+    p_summary.add_argument(
+        "--output", default="summary.json", help="Output path for --format json/csv"
+    )
     p_summary.add_argument(
         "--fail-on-difficulty",
         choices=("easy", "medium", "hard"),

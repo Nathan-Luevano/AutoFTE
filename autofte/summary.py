@@ -1,6 +1,21 @@
+import csv
+import io
 from datetime import datetime
 
 from . import crash_display, severity
+
+CSV_COLUMNS = (
+    "rank",
+    "difficulty",
+    "confidence",
+    "score",
+    "count",
+    "reproducible_count",
+    "bug_class",
+    "signature",
+    "group_id",
+    "sample_crash_file",
+)
 
 SCHEMA = "autofte-summary/1"
 
@@ -124,6 +139,15 @@ def render_table(summary):
         ]
     )
     return "\n".join(lines)
+
+
+def render_csv(summary):
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=CSV_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    for group in summary.get("groups", []):
+        writer.writerow({key: group.get(key, "") for key in CSV_COLUMNS})
+    return buffer.getvalue()
 
 
 def build_summary(target_binary, source_file, triage, binary_data, llm_data):

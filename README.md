@@ -207,7 +207,7 @@ autofte [COMMAND] [OPTIONS]
 | `binscan` | `autofte binscan <binary> [options]` | Audits binary exploit mitigations and writes `binary_analysis.json`. |
 | `llm` | `autofte llm [options]` | Generates local LLM summary from triage and binscan artifacts. |
 | `report` | `autofte report [options]` | Compiles Markdown (`analysis_summary.md`), SARIF, or a consolidated JSON summary (`--format json`) from JSON artifacts. |
-| `summary` | `autofte summary [options]` | Prints a severity-ranked crash-group table (or JSON with `--json`) from analysis artifacts. |
+| `summary` | `autofte summary [options]` | Prints a severity-ranked crash-group table, or writes JSON/CSV with `--format`, from analysis artifacts. |
 | `dashboard` | `autofte dashboard [options]` | Renders the static HTML dashboard from JSON artifacts. |
 | `crash-info` | `autofte crash-info [file]` | Inspects file size, type, and hex preview of a single crash payload. |
 | `doctor` | `autofte doctor [options]` | Audits system dependencies and reporting tool availability (`--json` for machine-readable output). |

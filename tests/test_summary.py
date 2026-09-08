@@ -1,6 +1,12 @@
 import pytest
 
-from autofte.summary import SCHEMA, build_summary, groups_at_or_above, render_table
+from autofte.summary import (
+    SCHEMA,
+    build_summary,
+    groups_at_or_above,
+    render_csv,
+    render_table,
+)
 
 
 def _triage():
@@ -122,6 +128,22 @@ def test_render_table_lists_ranked_groups():
     assert "stack-buffer-overflow (write, 64 bytes)" in text
     lines = [ln for ln in text.splitlines() if ln.strip().startswith(("1", "2"))]
     assert lines[0].split()[1] == "Easy"
+
+
+def test_render_csv_has_header_and_row_per_group():
+    csv_text = render_csv(build_summary("./target", "vuln.c", _triage(), {}, {}))
+    lines = csv_text.strip().splitlines()
+    assert lines[0].startswith("rank,difficulty,confidence")
+    assert len(lines) == 3
+    assert "stack-buffer-overflow" in csv_text
+
+
+def test_render_csv_empty_is_header_only():
+    csv_text = render_csv(build_summary("./target", "vuln.c", {}, {}, {}))
+    assert csv_text.strip().splitlines() == [",".join([
+        "rank", "difficulty", "confidence", "score", "count", "reproducible_count",
+        "bug_class", "signature", "group_id", "sample_crash_file",
+    ])]
 
 
 def test_render_table_handles_no_groups():
