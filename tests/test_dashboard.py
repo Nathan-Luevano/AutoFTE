@@ -164,6 +164,19 @@ def test_build_html_group_rows_ranked_by_severity():
     assert html_out.index("stack-smash") < html_out.index("null-deref")
 
 
+def test_build_html_renders_disassembly_context_escaped():
+    llm_data = {"summary": "s", "disassembly_context": "105b30: cmp <a> & 0x1"}
+    html = build_html({}, {}, llm_data)
+    assert "Faulting instruction context" in html
+    assert "<a>" not in html
+    assert "&lt;a&gt;" in html
+
+
+def test_build_html_no_disassembly_section_when_absent():
+    html = build_html({}, {}, {"summary": "s"})
+    assert "Faulting instruction context" not in html
+
+
 def test_build_html_includes_llm_narrative_fields():
     llm_data = {
         "summary": "A heap overflow.",

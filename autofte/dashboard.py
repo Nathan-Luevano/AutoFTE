@@ -108,6 +108,16 @@ def build_html(triage, binary_data, llm_data, max_groups=None):
         narrative_bits.append(f"Root cause: {llm_data['root_cause']}")
     narrative_html = _render_list(narrative_bits)
 
+    disassembly = llm_data.get("disassembly_context")
+    disassembly_html = ""
+    if disassembly:
+        disassembly_html = (
+            '<section class="section card">'
+            "<h2>Faulting instruction context</h2>"
+            f"<pre>{html.escape(disassembly)}</pre>"
+            "</section>"
+        )
+
     group_rows_html = "".join(group_rows) if group_rows else (
         '<tr><td colspan="5">No crash data found.</td></tr>'
     )
@@ -170,6 +180,15 @@ def build_html(triage, binary_data, llm_data, max_groups=None):
     }}
     th {{ background: var(--accent-soft); font-weight: 600; }}
     ul {{ margin: 10px 0 0; padding-left: 18px; }}
+    pre {{
+      background: #f3ede2;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }}
     .section {{ margin-top: 20px; }}
     details {{ margin-top: 4px; }}
     details summary {{
@@ -253,6 +272,8 @@ def build_html(triage, binary_data, llm_data, max_groups=None):
         {fixes_html}
       </div>
     </section>
+
+    {disassembly_html}
   </div>
 </body>
 </html>

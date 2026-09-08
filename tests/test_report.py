@@ -245,6 +245,19 @@ def test_build_report_llm_notes_absent_summary_and_bug_type():
     assert "Likely bug type" not in text
 
 
+def test_build_report_includes_disassembly_context_when_present():
+    llm_data = {"summary": "overflow", "disassembly_context": "  105b30: push %rbp\n  105b31: ret"}
+    text = build_report("./target", "vuln.c", {}, {}, llm_data)
+    assert "## Faulting instruction context" in text
+    assert "105b30: push %rbp" in text
+    assert "```" in text
+
+
+def test_build_report_omits_disassembly_section_when_absent():
+    text = build_report("./target", "vuln.c", {}, {}, {"summary": "x"})
+    assert "Faulting instruction context" not in text
+
+
 def test_build_report_includes_what_would_confirm():
     llm_data = {
         "summary": "Looks like a heap overflow.",

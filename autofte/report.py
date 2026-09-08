@@ -157,5 +157,9 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data, max_
         lines.extend(["", "What would confirm this:"])
         lines.extend(f"- {item}" for item in what_would_confirm)
 
+    disassembly = llm_data.get("disassembly_context")
+    if disassembly:
+        lines.extend(["", "## Faulting instruction context", "", "```", disassembly, "```"])
+
     lines.append("")
     return "\n".join(lines)

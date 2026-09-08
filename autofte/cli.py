@@ -192,6 +192,9 @@ def cmd_llm(args):
         print(f"Error: {exc}")
         return 1
 
+    if disassembly:
+        result["disassembly_context"] = disassembly
+
     write_json(args.output, result)
     if not quiet:
         print(f"Wrote {args.output}")
