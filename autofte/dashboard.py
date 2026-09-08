@@ -25,7 +25,17 @@ def _render_list(items):
     return f"<ul>{rows}</ul>"
 
 
-def _group_row(frame, data, binary_data):
+def _ranked_groups(groups, binary_data):
+    ranked = []
+    for frame, data in groups.items():
+        crash_record = crash_display.representative_crash_record(data)
+        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
+        ranked.append((assessment["score"], -data.get("count", 0), frame, data, assessment))
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return ranked
+
+
+def _group_row(rank, frame, data, assessment):
     sample = data.get("crashes", [{}])[0]
     crash_record = crash_display.representative_crash_record(data)
     label = crash_display.bug_class_label(crash_record)
@@ -38,7 +48,6 @@ def _group_row(frame, data, binary_data):
     else:
         signature_html = f"<strong>{html.escape(frame)}</strong>"
 
-    assessment = severity.assess_crash_difficulty(binary_data, crash_record)
     confidence_pct = round(assessment["confidence"] * 100)
     difficulty_html = (
         f"{html.escape(assessment['difficulty'])} "
@@ -50,6 +59,7 @@ def _group_row(frame, data, binary_data):
 
     return (
         "<tr>"
+        f"<td>{rank}</td>"
         f"<td>{signature_html}</td>"
         f"<td>{data.get('count', 0)}</td>"
         f"<td>{difficulty_html}</td>"
@@ -60,9 +70,10 @@ def _group_row(frame, data, binary_data):
 
 def build_html(triage, binary_data, llm_data):
     groups = triage.get("groups", {})
+    ranked = _ranked_groups(groups, binary_data)[:MAX_GROUPS_SHOWN]
     group_rows = [
-        _group_row(frame, data, binary_data)
-        for frame, data in list(groups.items())[:MAX_GROUPS_SHOWN]
+        _group_row(rank, frame, data, assessment)
+        for rank, (_score, _neg, frame, data, assessment) in enumerate(ranked, start=1)
     ]
 
     def _flag(key):
@@ -98,7 +109,7 @@ def build_html(triage, binary_data, llm_data):
     narrative_html = _render_list(narrative_bits)
 
     group_rows_html = "".join(group_rows) if group_rows else (
-        '<tr><td colspan="4">No crash data found.</td></tr>'
+        '<tr><td colspan="5">No crash data found.</td></tr>'
     )
 
     return f"""<!DOCTYPE html>
@@ -202,14 +213,15 @@ def build_html(triage, binary_data, llm_data):
     <section class="section card">
       <h2>Crash groups</h2>
       <p class="muted">
-        Ranked by crash count -- collapsed via major/minor stack-hash dedup, not raw
-        crash count. Bug class and difficulty come from the crash-aware severity
-        assessment for a representative crash in each group; click "why" for the
-        reasoning behind it.
+        Ranked by crash-aware exploit difficulty (most severe first), with crash
+        count breaking ties. Groups are collapsed via major/minor stack-hash dedup.
+        Bug class and difficulty come from the crash-aware severity assessment for a
+        representative crash in each group; click "why" for the reasoning behind it.
       </p>
       <table>
         <thead>
-          <tr><th>Bug class / signature</th><th>Count</th><th>Difficulty</th><th>Sample</th></tr>
+          <tr><th>#</th><th>Bug class / signature</th><th>Count</th>
+              <th>Difficulty</th><th>Sample</th></tr>
         </thead>
         <tbody>
           {group_rows_html}

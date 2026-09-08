@@ -112,6 +112,35 @@ def test_build_html_group_row_difficulty_present_without_sanitizer_record():
     assert "Easy" in html_out or "Medium" in html_out or "Hard" in html_out
 
 
+def test_build_html_group_rows_ranked_by_severity():
+    triage = {
+        "groups": {
+            "null-deref": {
+                "count": 9,
+                "crashes": [
+                    {
+                        "file": "c1",
+                        "size": 1,
+                        "sanitizer": {"bug_class": "null-pointer-dereference"},
+                    }
+                ],
+            },
+            "stack-smash": {
+                "count": 1,
+                "crashes": [
+                    {
+                        "file": "c2",
+                        "size": 1,
+                        "sanitizer": {"bug_class": "stack-buffer-overflow", "access_type": "write"},
+                    }
+                ],
+            },
+        }
+    }
+    html_out = build_html(triage, {}, {})
+    assert html_out.index("stack-smash") < html_out.index("null-deref")
+
+
 def test_build_html_includes_llm_narrative_fields():
     llm_data = {
         "summary": "A heap overflow.",
