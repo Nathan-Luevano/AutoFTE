@@ -1,0 +1,102 @@
+from datetime import datetime
+
+from . import crash_display, severity
+
+SCHEMA = "autofte-summary/1"
+
+_PROTECTION_KEYS = (
+    ("aslr_system", "aslr"),
+    ("nx_bit", "nx"),
+    ("stack_canaries", "stack_canaries"),
+    ("pie", "pie"),
+)
+
+
+def _binary_section(binary_data):
+    mitigation = binary_data.get("exploit_mitigation_summary", {}) or {}
+    protections = {}
+    for key, name in _PROTECTION_KEYS:
+        enabled = (binary_data.get(key) or {}).get("enabled")
+        if enabled is not None:
+            protections[name] = bool(enabled)
+    relro = (binary_data.get("relro") or {}).get("status")
+    if relro:
+        protections["relro"] = relro
+    return {
+        "protection_level": mitigation.get("protection_level", "Unknown"),
+        "exploit_difficulty": mitigation.get("exploit_difficulty", "Unknown"),
+        "protection_count": mitigation.get("protection_count", 0),
+        "protections": protections,
+        "vulnerable_areas": list(mitigation.get("vulnerable_areas") or []),
+        "required_techniques": list(mitigation.get("required_techniques") or []),
+    }
+
+
+def _group_entries(triage, binary_data):
+    entries = []
+    for signature, data in (triage.get("groups") or {}).items():
+        crashes = data.get("crashes", []) or []
+        crash_record = crash_display.representative_crash_record(data)
+        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
+        reproducible = sum(
+            1 for c in crashes if c.get("reproducibility") == "reproducible"
+        )
+        entries.append(
+            {
+                "signature": signature,
+                "bug_class": (crash_record or {}).get("bug_class"),
+                "bug_class_label": crash_display.bug_class_label(crash_record),
+                "access_type": (crash_record or {}).get("access_type"),
+                "access_size": (crash_record or {}).get("access_size"),
+                "count": data.get("count", len(crashes)),
+                "reproducible_count": reproducible,
+                "sample_crash_file": (crashes[0].get("file") if crashes else None),
+                "difficulty": assessment["difficulty"],
+                "confidence": assessment["confidence"],
+                "score": assessment["score"],
+                "basis": assessment["basis"],
+                "rationale": assessment["rationale"],
+            }
+        )
+    entries.sort(key=lambda e: (e["score"], -e["count"]))
+    for rank, entry in enumerate(entries, start=1):
+        entry["rank"] = rank
+    return entries
+
+
+def _llm_section(llm_data):
+    if not llm_data or llm_data.get("status") == "skipped":
+        return None
+    keys = (
+        "summary",
+        "likely_bug_type",
+        "root_cause",
+        "confidence",
+        "next_checks",
+        "fix_ideas",
+        "what_would_confirm",
+        "agreement_score",
+    )
+    section = {key: llm_data[key] for key in keys if key in llm_data}
+    return section or None
+
+
+def build_summary(target_binary, source_file, triage, binary_data, llm_data):
+    groups = _group_entries(triage, binary_data)
+    return {
+        "schema": SCHEMA,
+        "target_binary": str(target_binary),
+        "source_file": str(source_file),
+        "generated": datetime.now().isoformat(timespec="seconds"),
+        "totals": {
+            "crashes": triage.get("total_crashes", 0),
+            "unique_groups": triage.get("unique_crash_frames", len(groups)),
+            "triage_mode": triage.get("triage_mode"),
+            "no_crash_count": triage.get("no_crash_count", 0),
+            "timeout_count": triage.get("timeout_count", 0),
+        },
+        "top_group": groups[0] if groups else None,
+        "groups": groups,
+        "binary": _binary_section(binary_data),
+        "llm": _llm_section(llm_data),
+    }
