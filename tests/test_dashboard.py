@@ -79,6 +79,22 @@ def test_build_html_group_rows_limited_to_eight():
     assert shown == 8
 
 
+def test_build_html_shows_reproducibility_in_count_cell():
+    triage = {
+        "groups": {
+            "SIGSEGV": {
+                "count": 2,
+                "crashes": [
+                    {"file": "c1", "size": 1, "reproducibility": "reproducible"},
+                    {"file": "c2", "size": 1, "reproducibility": "non-reproducible"},
+                ],
+            }
+        }
+    }
+    html = build_html(triage, {}, {})
+    assert "1/2 reproducible" in html
+
+
 def test_build_html_max_groups_override():
     groups = {f"SIG{i}": {"count": 1, "crashes": [{"file": f"c{i}", "size": 1}]} for i in range(12)}
     html = build_html({"groups": groups}, {}, {}, max_groups=3)

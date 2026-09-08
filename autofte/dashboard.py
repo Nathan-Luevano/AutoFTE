@@ -38,6 +38,14 @@ def _group_row(rank, frame, data, assessment):
     else:
         signature_html = f"<strong>{html.escape(frame)}</strong>"
 
+    crashes = data.get("crashes", [])
+    count_html = str(data.get("count", 0))
+    if crashes and any("reproducibility" in c for c in crashes):
+        reproducible = sum(1 for c in crashes if c.get("reproducibility") == "reproducible")
+        count_html += (
+            f"<br><span class=\"muted\">{reproducible}/{len(crashes)} reproducible</span>"
+        )
+
     confidence_pct = round(assessment["confidence"] * 100)
     difficulty_html = (
         f"{html.escape(assessment['difficulty'])} "
@@ -51,7 +59,7 @@ def _group_row(rank, frame, data, assessment):
         "<tr>"
         f"<td>{rank}</td>"
         f"<td>{signature_html}</td>"
-        f"<td>{data.get('count', 0)}</td>"
+        f"<td>{count_html}</td>"
         f"<td>{difficulty_html}</td>"
         f"<td>{html.escape(str(sample.get('file', 'n/a')))}</td>"
         "</tr>"
