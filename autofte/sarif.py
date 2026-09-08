@@ -73,6 +73,8 @@ FALLBACK_INFORMATION_URI = "https://github.com/Nathan-Luevano/AutoFTE"
 LOW_CONFIDENCE_THRESHOLD = 0.5
 HIGH_CONFIDENCE_THRESHOLD = 0.7
 
+SECURITY_SEVERITY_BY_DIFFICULTY = {"Easy": "8.5", "Medium": "5.5", "Hard": "2.5"}
+
 _LABEL_LOCATION_RE = re.compile(r"\bat (\S+):(\d+)")
 
 
@@ -176,9 +178,14 @@ def build_sarif(triage, binary_data, llm_data=None, target_binary=None):
         assessment = severity.assess_crash_difficulty(binary_data, crash_record)
         level = _map_level(assessment["difficulty"], assessment["confidence"])
 
-        rules_by_id.setdefault(
-            rule_id, {"id": rule_id, "shortDescription": {"text": heading}}
-        )
+        if rule_id not in rules_by_id:
+            rule = {"id": rule_id, "shortDescription": {"text": heading}}
+            rule_properties = {"tags": ["security"]}
+            security_severity = SECURITY_SEVERITY_BY_DIFFICULTY.get(assessment["difficulty"])
+            if security_severity is not None:
+                rule_properties["security-severity"] = security_severity
+            rule["properties"] = rule_properties
+            rules_by_id[rule_id] = rule
 
         result = {
             "ruleId": rule_id,

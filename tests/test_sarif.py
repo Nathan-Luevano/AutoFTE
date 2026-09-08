@@ -99,6 +99,19 @@ def test_build_sarif_result_carries_group_fingerprint_and_difficulty():
     assert result["properties"]["difficulty"] in ("Easy", "Medium", "Hard")
 
 
+def test_build_sarif_rule_carries_security_severity_and_tags():
+    triage = _triage_with_groups(
+        (
+            "grp",
+            {"count": 1, "crashes": [{"file": "c1", "size": 4, "sanitizer": _sanitizer_record()}]},
+        )
+    )
+    run = sarif.build_sarif(triage, WEAK_ANALYSIS)["runs"][0]
+    rule = run["tool"]["driver"]["rules"][0]
+    assert rule["properties"]["tags"] == ["security"]
+    assert rule["properties"]["security-severity"] in {"8.5", "5.5", "2.5"}
+
+
 def test_build_sarif_no_fingerprint_when_group_id_absent():
     triage = _triage_with_groups(_group(1, [{"file": "c1", "size": 4}]))
     result = sarif.build_sarif(triage, WEAK_ANALYSIS)["runs"][0]["results"][0]
