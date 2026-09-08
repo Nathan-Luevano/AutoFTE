@@ -54,10 +54,16 @@ UBSAN_LINE_RE = re.compile(
     r"^(.+?):(\d+):(\d+):\s+runtime error:\s+(.+)$", re.MULTILINE
 )
 
+LSAN_ERROR_MARKER_RE = re.compile(r"(?:==\d+==)?ERROR: LeakSanitizer: detected memory leaks")
+LSAN_ASAN_SUMMARY_RE = re.compile(r"SUMMARY: AddressSanitizer:.*leaked")
+LSAN_LEAK_SIZE_RE = re.compile(r"(Direct|Indirect) leak of (\d+) byte\(s\) in (\d+) object\(s\)")
+
 
 def detect_sanitizer_output(text):
     if not text:
         return None
+    if LSAN_ERROR_MARKER_RE.search(text) or LSAN_ASAN_SUMMARY_RE.search(text):
+        return "lsan"
     if ASAN_ERROR_MARKER_RE.search(text):
         return "asan"
     if UBSAN_LINE_RE.search(text):
@@ -238,8 +244,47 @@ def parse_ubsan(text):
     }
 
 
+def parse_lsan(text):
+    if not (LSAN_ERROR_MARKER_RE.search(text) or LSAN_ASAN_SUMMARY_RE.search(text)):
+        return None
+
+    total_bytes = 0
+    total_objects = 0
+    for _kind, size, count in LSAN_LEAK_SIZE_RE.findall(text):
+        total_bytes += int(size)
+        total_objects += int(count)
+
+    alloc_stack = []
+    collecting = False
+    for raw_line in text.splitlines():
+        frame = _parse_asan_frame(raw_line)
+        if frame is not None:
+            if collecting:
+                alloc_stack.append(frame)
+            continue
+        if LSAN_LEAK_SIZE_RE.search(raw_line):
+            collecting = True
+        elif raw_line.strip():
+            collecting = False
+
+    return {
+        "sanitizer": "LeakSanitizer",
+        "bug_class": "memory-leak",
+        "access_type": None,
+        "access_size": total_bytes or None,
+        "fault_addr": None,
+        "leaked_objects": total_objects or None,
+        "crash_stack": alloc_stack[:1],
+        "alloc_stack": alloc_stack,
+        "free_stack": [],
+        "sanitizer_raw": text,
+    }
+
+
 def parse_sanitizer_output(text):
     kind = detect_sanitizer_output(text)
+    if kind == "lsan":
+        return parse_lsan(text)
     if kind == "asan":
         return parse_asan(text)
     if kind == "ubsan":

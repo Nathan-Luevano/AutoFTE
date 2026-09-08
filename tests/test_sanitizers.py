@@ -26,9 +26,28 @@ diagnostic prints no stack trace at all in real ASan output, so
 from autofte.sanitizers import (
     detect_sanitizer_output,
     parse_asan,
+    parse_lsan,
     parse_sanitizer_output,
     parse_ubsan,
 )
+
+LSAN_MEMORY_LEAK = """\
+=================================================================
+==389672==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 32 byte(s) in 1 object(s) allocated from:
+    #0 0x718a0eefd9c7 in malloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69
+    #1 0x61fb5f30a202 in dup /x/leak.c:3
+    #2 0x61fb5f30a245 in main /x/leak.c:4
+    #3 0x718a0ea2a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+
+Direct leak of 32 byte(s) in 1 object(s) allocated from:
+    #0 0x718a0eefd9c7 in malloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69
+    #1 0x61fb5f30a202 in dup /x/leak.c:3
+    #2 0x61fb5f30a236 in main /x/leak.c:4
+
+SUMMARY: AddressSanitizer: 64 byte(s) leaked in 2 allocation(s).
+"""
 
 HEAP_BUFFER_OVERFLOW_READ = """\
 =================================================================
@@ -483,3 +502,28 @@ def test_parse_sanitizer_output_none_for_plain_gdb_output():
 
 def test_parse_sanitizer_output_none_for_arbitrary_text():
     assert parse_sanitizer_output("program printed some ordinary output\n") is None
+
+
+def test_detect_lsan_output():
+    assert detect_sanitizer_output(LSAN_MEMORY_LEAK) == "lsan"
+
+
+def test_parse_lsan_extracts_totals_and_alloc_stack():
+    record = parse_lsan(LSAN_MEMORY_LEAK)
+    assert record["sanitizer"] == "LeakSanitizer"
+    assert record["bug_class"] == "memory-leak"
+    assert record["access_size"] == 64
+    assert record["leaked_objects"] == 2
+    assert record["access_type"] is None
+    funcs = [f["func"] for f in record["alloc_stack"]]
+    assert "dup" in funcs and "main" in funcs
+    assert record["crash_stack"] == record["alloc_stack"][:1]
+
+
+def test_parse_sanitizer_output_dispatches_to_lsan():
+    record = parse_sanitizer_output(LSAN_MEMORY_LEAK)
+    assert record["sanitizer"] == "LeakSanitizer"
+
+
+def test_parse_lsan_none_for_non_leak_text():
+    assert parse_lsan(GDB_OUTPUT) is None

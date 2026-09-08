@@ -65,6 +65,12 @@ BUG_CLASS_PROFILES = {
         "wild-pointer write, indistinguishable from this report alone",
         False,
     ),
+    "memory-leak": (
+        2.5,
+        "leaks memory but does not corrupt it -- a resource-exhaustion or availability "
+        "issue, not a memory-safety primitive",
+        True,
+    ),
     "null-pointer-dereference": (
         2.0,
         "the zero page is unmapped and rarely attacker-influenced -- almost always a "
