@@ -16,7 +16,7 @@ CLI plumbing is needed to keep this report honest and self-contained.
 
 from datetime import datetime
 
-from . import crash_display, severity
+from . import crash_display
 
 _PROTECTION_LABELS = (
     ("aslr_system", "ASLR"),
@@ -56,20 +56,14 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data, max_
                 "",
             ]
         )
-        ranked = []
-        for frame, data in groups.items():
-            crash_record = crash_display.representative_crash_record(data)
-            assessment = severity.assess_crash_difficulty(binary_data, crash_record)
-            ranked.append((assessment["score"], -data.get("count", 0), frame, data, assessment))
-        ranked.sort(key=lambda item: (item[0], item[1]))
-
-        for index, (_score, _neg, frame, data, assessment) in enumerate(
-            ranked[:max_groups], start=1
-        ):
+        ranked = crash_display.ranked_groups(groups, binary_data)
+        for index, item in enumerate(ranked[:max_groups], start=1):
+            frame = item["signature"]
+            data = item["data"]
+            assessment = item["assessment"]
             sample = data.get("crashes", [{}])[0]
             count = data.get("count", 0)
-            crash_record = crash_display.representative_crash_record(data)
-            label = crash_display.bug_class_label(crash_record)
+            label = crash_display.bug_class_label(item["crash_record"])
             heading = label or frame
 
             lines.append(f"### {index}. {heading} -- {count} crashes")

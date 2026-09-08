@@ -13,7 +13,7 @@ recomputed here directly from `triage`/`binary_data`, the same way
 
 import html
 
-from . import crash_display, severity
+from . import crash_display
 
 MAX_GROUPS_SHOWN = 8
 
@@ -23,16 +23,6 @@ def _render_list(items):
         return "<p>None.</p>"
     rows = "".join(f"<li>{html.escape(str(item))}</li>" for item in items)
     return f"<ul>{rows}</ul>"
-
-
-def _ranked_groups(groups, binary_data):
-    ranked = []
-    for frame, data in groups.items():
-        crash_record = crash_display.representative_crash_record(data)
-        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
-        ranked.append((assessment["score"], -data.get("count", 0), frame, data, assessment))
-    ranked.sort(key=lambda item: (item[0], item[1]))
-    return ranked
 
 
 def _group_row(rank, frame, data, assessment):
@@ -72,10 +62,10 @@ def build_html(triage, binary_data, llm_data, max_groups=None):
     if max_groups is None:
         max_groups = MAX_GROUPS_SHOWN
     groups = triage.get("groups", {})
-    ranked = _ranked_groups(groups, binary_data)[:max_groups]
+    ranked = crash_display.ranked_groups(groups, binary_data)[:max_groups]
     group_rows = [
-        _group_row(rank, frame, data, assessment)
-        for rank, (_score, _neg, frame, data, assessment) in enumerate(ranked, start=1)
+        _group_row(rank, item["signature"], item["data"], item["assessment"])
+        for rank, item in enumerate(ranked, start=1)
     ]
 
     def _flag(key):

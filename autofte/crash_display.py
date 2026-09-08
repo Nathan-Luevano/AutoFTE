@@ -7,6 +7,8 @@ functions) -- factored out here so there is exactly one place that decides
 what "the" crash record for a group is and how its bug class reads.
 """
 
+from . import severity
+
 
 def representative_crash_record(group_data):
     """Return the first sanitizer record found among `group_data`'s
@@ -17,6 +19,24 @@ def representative_crash_record(group_data):
         if record:
             return record
     return None
+
+
+def ranked_groups(groups, binary_data):
+    ranked = []
+    for signature, data in (groups or {}).items():
+        crash_record = representative_crash_record(data)
+        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
+        ranked.append(
+            {
+                "signature": signature,
+                "data": data,
+                "crash_record": crash_record,
+                "assessment": assessment,
+                "count": data.get("count", 0),
+            }
+        )
+    ranked.sort(key=lambda item: (item["assessment"]["score"], -item["count"]))
+    return ranked
 
 
 def bug_class_label(crash_record):

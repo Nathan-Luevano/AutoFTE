@@ -2,7 +2,7 @@ import csv
 import io
 from datetime import datetime
 
-from . import crash_display, severity
+from . import crash_display
 
 CSV_COLUMNS = (
     "rank",
@@ -62,15 +62,20 @@ def _binary_section(binary_data):
 
 def _group_entries(triage, binary_data):
     entries = []
-    for signature, data in (triage.get("groups") or {}).items():
+    for rank, item in enumerate(
+        crash_display.ranked_groups(triage.get("groups"), binary_data), start=1
+    ):
+        signature = item["signature"]
+        data = item["data"]
+        crash_record = item["crash_record"]
+        assessment = item["assessment"]
         crashes = data.get("crashes", []) or []
-        crash_record = crash_display.representative_crash_record(data)
-        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
         reproducible = sum(
             1 for c in crashes if c.get("reproducibility") == "reproducible"
         )
         entries.append(
             {
+                "rank": rank,
                 "signature": signature,
                 "group_id": data.get("group_id"),
                 "bug_class": (crash_record or {}).get("bug_class"),
@@ -87,9 +92,6 @@ def _group_entries(triage, binary_data):
                 "rationale": assessment["rationale"],
             }
         )
-    entries.sort(key=lambda e: (e["score"], -e["count"]))
-    for rank, entry in enumerate(entries, start=1):
-        entry["rank"] = rank
     return entries
 
 
