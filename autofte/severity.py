@@ -65,6 +65,12 @@ BUG_CLASS_PROFILES = {
         "wild-pointer write, indistinguishable from this report alone",
         False,
     ),
+    "use-of-uninitialized-value": (
+        0.5,
+        "reads uninitialized memory -- can leak stale contents or, if the value reaches a "
+        "branch or index, cause attacker-influenced behavior",
+        True,
+    ),
     "memory-leak": (
         2.5,
         "leaks memory but does not corrupt it -- a resource-exhaustion or availability "

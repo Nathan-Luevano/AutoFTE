@@ -54,6 +54,7 @@ UBSAN_LINE_RE = re.compile(
     r"^(.+?):(\d+):(\d+):\s+runtime error:\s+(.+)$", re.MULTILINE
 )
 
+MSAN_MARKER_RE = re.compile(r"==\d+==WARNING: MemorySanitizer: (.+)$", re.MULTILINE)
 LSAN_ERROR_MARKER_RE = re.compile(r"(?:==\d+==)?ERROR: LeakSanitizer: detected memory leaks")
 LSAN_ASAN_SUMMARY_RE = re.compile(r"SUMMARY: AddressSanitizer:.*leaked")
 LSAN_LEAK_SIZE_RE = re.compile(r"(Direct|Indirect) leak of (\d+) byte\(s\) in (\d+) object\(s\)")
@@ -66,6 +67,8 @@ def detect_sanitizer_output(text):
         return "lsan"
     if ASAN_ERROR_MARKER_RE.search(text):
         return "asan"
+    if MSAN_MARKER_RE.search(text):
+        return "msan"
     if UBSAN_LINE_RE.search(text):
         return "ubsan"
     return None
@@ -293,8 +296,38 @@ def parse_lsan(text):
     }
 
 
+def parse_msan(text):
+    marker = MSAN_MARKER_RE.search(text)
+    if not marker:
+        return None
+
+    bug_class = marker.group(1).strip().split()[0].rstrip(":")
+
+    crash_stack = []
+    for raw_line in text[marker.end():].splitlines():
+        frame = _parse_asan_frame(raw_line)
+        if frame is not None:
+            crash_stack.append(frame)
+        elif crash_stack:
+            break
+
+    return {
+        "sanitizer": "MemorySanitizer",
+        "bug_class": bug_class or "use-of-uninitialized-value",
+        "access_type": "read",
+        "access_size": None,
+        "fault_addr": None,
+        "crash_stack": crash_stack,
+        "alloc_stack": [],
+        "free_stack": [],
+        "sanitizer_raw": text,
+    }
+
+
 def parse_sanitizer_output(text):
     kind = detect_sanitizer_output(text)
+    if kind == "msan":
+        return parse_msan(text)
     if kind == "lsan":
         return parse_lsan(text)
     if kind == "asan":

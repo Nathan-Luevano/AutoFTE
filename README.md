@@ -31,7 +31,7 @@
 
 Fuzzing campaigns often yield hundreds or thousands of crash artifacts that share underlying root causes. **AutoFTE** automates post-fuzzing triage entirely on your local machine:
 
-1. **Deduplicates crashes** into root-cause buckets using AddressSanitizer (ASan), UndefinedBehaviorSanitizer (UBSan), LeakSanitizer (LSan), or GDB backtraces with ASLR-shift-normalized stack hashing.
+1. **Deduplicates crashes** into root-cause buckets using AddressSanitizer (ASan), UndefinedBehaviorSanitizer (UBSan), LeakSanitizer (LSan), MemorySanitizer (MSan), or GDB backtraces with ASLR-shift-normalized stack hashing.
 2. **Audits binary defenses** (NX, PIE, RELRO, stack canaries, FORTIFY_SOURCE, unsafe libc calls) to profile target exploit mitigations.
 3. **Assesses exploit difficulty** by fusing fault mechanics with active mitigations into an evidence-backed difficulty rating, confidence score, and clear rationale.
 4. **Generates grounded write-ups** using an optional local Ollama LLM with schema-constrained, evidence-ledgered prompts to prevent hallucination.
@@ -49,7 +49,7 @@ AutoFTE runs completely offline. No crash data, binaries, or source code ever le
 
 | Capability | Technical Implementation |
 |---|---|
-| **Deterministic Crash Deduplication** | Groups crashes using major/minor stack-hash algorithms. Extracts bug classes, read/write access types, access sizes, fault addresses, and alloc/free stacks from ASan/UBSan/LSan reports. Falls back to GDB backtraces or exit-signal bucketing when sanitizer metadata is absent. |
+| **Deterministic Crash Deduplication** | Groups crashes using major/minor stack-hash algorithms. Extracts bug classes, read/write access types, access sizes, fault addresses, and alloc/free stacks from ASan/UBSan/LSan/MSan reports. Falls back to GDB backtraces or exit-signal bucketing when sanitizer metadata is absent. |
 | **Binary Mitigation Scanning** | Inspects ELF binaries using standard binutils (`readelf`, `objdump`, `nm`, `ldd`, `file`, `strings`) to audit NX, PIE, Full/Partial RELRO, Stack Canaries, FORTIFY_SOURCE, and unsafe C library symbols (`strcpy`, `gets`, `sprintf`). |
 | **Context-Aware Exploit Severity** | Evaluates exploit difficulty (`Easy`, `Medium`, `Hard`, `Unknown`) with explicit confidence scores and justification strings based on the intersection of fault type and binary mitigations. |
 | **Grounded Local LLM Summaries** | Invokes local Ollama models via strict JSON schema constraints and a 6-stage deterministic validator pipeline to summarize root causes, suggest verification checks, and draft fixes without ungrounded claims. Skips cleanly if Ollama is unavailable. |
@@ -65,7 +65,7 @@ AutoFTE runs completely offline. No crash data, binaries, or source code ever le
 |---|---|---|---|---|
 | **Setup Complexity** | Manual | Requires GDB + Python plugin | Rust toolchain, Docker, ptrace caps | Single command (`pipx install autofte`) |
 | **Root-Cause Deduplication** | Manual inspection | Single crash at a time | Major/minor stack hashing | Major/minor stack hashing with ASLR normalization |
-| **Sanitizer Report Parsing** | Manual reading | No | Yes | Yes (ASan, UBSan & LSan normalized records) |
+| **Sanitizer Report Parsing** | Manual reading | No | Yes | Yes (ASan, UBSan, LSan & MSan normalized records) |
 | **Mitigation & Severity Scoring** | Manual assessment | Basic heuristics | Rule-based triage | Fused crash fault + binary defense severity scoring |
 | **Plain-Language Write-Ups** | None | None | None | Local LLM summaries grounded in crash evidence |
 | **SARIF / CI Code Scanning** | None | None | Yes | Native SARIF v2.1.0 output & GitHub Action |
@@ -401,7 +401,7 @@ AutoFTE/
 │   ├── cli.py               # CLI command definitions, argument parsing, and handlers
 │   ├── triage.py            # Crash reproduction and deduplication orchestrator
 │   ├── dedup.py             # Major and minor stack hashing algorithms
-│   ├── sanitizers.py        # ASan, UBSan, and LSan output parsers and normalizers
+│   ├── sanitizers.py        # ASan, UBSan, LSan, MSan output parsers and normalizers
 │   ├── binary_analysis.py   # ELF binary security feature inspection
 │   ├── severity.py          # Crash-aware exploit difficulty and severity scoring
 │   ├── llm.py               # Local Ollama client, evidence ledger, and validators

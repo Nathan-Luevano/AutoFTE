@@ -27,9 +27,19 @@ from autofte.sanitizers import (
     detect_sanitizer_output,
     parse_asan,
     parse_lsan,
+    parse_msan,
     parse_sanitizer_output,
     parse_ubsan,
 )
+
+MSAN_UNINIT_VALUE = """\
+==2451==WARNING: MemorySanitizer: use-of-uninitialized-value
+    #0 0x4a1b2c in compute /x/msan.c:9:7
+    #1 0x4a1e40 in main /x/msan.c:17:10
+    #2 0x7fabc in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29d8f)
+
+SUMMARY: MemorySanitizer: use-of-uninitialized-value /x/msan.c:9:7 in compute
+"""
 
 LSAN_MEMORY_LEAK = """\
 =================================================================
@@ -543,3 +553,20 @@ def test_parse_sanitizer_output_dispatches_to_lsan():
 
 def test_parse_lsan_none_for_non_leak_text():
     assert parse_lsan(GDB_OUTPUT) is None
+
+
+def test_detect_msan_output():
+    assert detect_sanitizer_output(MSAN_UNINIT_VALUE) == "msan"
+
+
+def test_parse_msan_extracts_bug_class_and_stack():
+    record = parse_msan(MSAN_UNINIT_VALUE)
+    assert record["sanitizer"] == "MemorySanitizer"
+    assert record["bug_class"] == "use-of-uninitialized-value"
+    assert record["access_type"] == "read"
+    funcs = [f["func"] for f in record["crash_stack"]]
+    assert funcs[:2] == ["compute", "main"]
+
+
+def test_parse_sanitizer_output_dispatches_to_msan():
+    assert parse_sanitizer_output(MSAN_UNINIT_VALUE)["sanitizer"] == "MemorySanitizer"
