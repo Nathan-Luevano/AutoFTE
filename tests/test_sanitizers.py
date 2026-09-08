@@ -29,8 +29,22 @@ from autofte.sanitizers import (
     parse_lsan,
     parse_msan,
     parse_sanitizer_output,
+    parse_tsan,
     parse_ubsan,
 )
+
+TSAN_DATA_RACE = """\
+==================
+WARNING: ThreadSanitizer: data race (pid=1201)
+  Write of size 4 at 0x7b0400000c00 by thread T1:
+    #0 increment /x/tsan.c:7 (race+0x12ab)
+    #1 worker /x/tsan.c:13 (race+0x1360)
+
+  Previous read of size 4 at 0x7b0400000c00 by main thread:
+    #0 main /x/tsan.c:22 (race+0x1410)
+
+SUMMARY: ThreadSanitizer: data race /x/tsan.c:7 in increment
+"""
 
 MSAN_UNINIT_VALUE = """\
 ==2451==WARNING: MemorySanitizer: use-of-uninitialized-value
@@ -570,3 +584,22 @@ def test_parse_msan_extracts_bug_class_and_stack():
 
 def test_parse_sanitizer_output_dispatches_to_msan():
     assert parse_sanitizer_output(MSAN_UNINIT_VALUE)["sanitizer"] == "MemorySanitizer"
+
+
+def test_detect_tsan_output():
+    assert detect_sanitizer_output(TSAN_DATA_RACE) == "tsan"
+
+
+def test_parse_tsan_extracts_race_and_access():
+    record = parse_tsan(TSAN_DATA_RACE)
+    assert record["sanitizer"] == "ThreadSanitizer"
+    assert record["bug_class"] == "data-race"
+    assert record["access_type"] == "write"
+    assert record["access_size"] == 4
+    funcs = [f["func"] for f in record["crash_stack"]]
+    assert funcs == ["increment", "worker"]
+    assert record["crash_stack"][0]["line"] == 7
+
+
+def test_parse_sanitizer_output_dispatches_to_tsan():
+    assert parse_sanitizer_output(TSAN_DATA_RACE)["sanitizer"] == "ThreadSanitizer"

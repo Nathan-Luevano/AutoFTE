@@ -55,6 +55,9 @@ UBSAN_LINE_RE = re.compile(
 )
 
 MSAN_MARKER_RE = re.compile(r"==\d+==WARNING: MemorySanitizer: (.+)$", re.MULTILINE)
+TSAN_MARKER_RE = re.compile(r"WARNING: ThreadSanitizer: (.+?)(?:\s+\(pid=\d+\))?$", re.MULTILINE)
+TSAN_ACCESS_RE = re.compile(r"\b(Write|Read|Atomic write|Atomic read) of size (\d+) at")
+TSAN_FRAME_RE = re.compile(r"^\s*#(\d+)\s+(\S+)\s+(.+?)(?:\s+\([^()]*\))?$")
 LSAN_ERROR_MARKER_RE = re.compile(r"(?:==\d+==)?ERROR: LeakSanitizer: detected memory leaks")
 LSAN_ASAN_SUMMARY_RE = re.compile(r"SUMMARY: AddressSanitizer:.*leaked")
 LSAN_LEAK_SIZE_RE = re.compile(r"(Direct|Indirect) leak of (\d+) byte\(s\) in (\d+) object\(s\)")
@@ -69,6 +72,8 @@ def detect_sanitizer_output(text):
         return "asan"
     if MSAN_MARKER_RE.search(text):
         return "msan"
+    if TSAN_MARKER_RE.search(text):
+        return "tsan"
     if UBSAN_LINE_RE.search(text):
         return "ubsan"
     return None
@@ -324,8 +329,60 @@ def parse_msan(text):
     }
 
 
+def _parse_tsan_frame(line):
+    match = TSAN_FRAME_RE.match(line)
+    if not match:
+        return None
+    frame_num, func, location = match.groups()
+    file_name, line_number = _parse_frame_location(location.strip())
+    return {
+        "frame": int(frame_num),
+        "addr": None,
+        "func": func,
+        "file": file_name,
+        "line": line_number,
+    }
+
+
+def parse_tsan(text):
+    marker = TSAN_MARKER_RE.search(text)
+    if not marker:
+        return None
+
+    bug_class = marker.group(1).strip().replace(" ", "-").lower()
+
+    access_type = None
+    access_size = None
+    access_match = TSAN_ACCESS_RE.search(text)
+    if access_match:
+        access_type = access_match.group(1).lower().split()[-1]
+        access_size = int(access_match.group(2))
+
+    crash_stack = []
+    for raw_line in text[marker.end():].splitlines():
+        frame = _parse_tsan_frame(raw_line)
+        if frame is not None:
+            crash_stack.append(frame)
+        elif crash_stack:
+            break
+
+    return {
+        "sanitizer": "ThreadSanitizer",
+        "bug_class": bug_class or "data-race",
+        "access_type": access_type,
+        "access_size": access_size,
+        "fault_addr": None,
+        "crash_stack": crash_stack,
+        "alloc_stack": [],
+        "free_stack": [],
+        "sanitizer_raw": text,
+    }
+
+
 def parse_sanitizer_output(text):
     kind = detect_sanitizer_output(text)
+    if kind == "tsan":
+        return parse_tsan(text)
     if kind == "msan":
         return parse_msan(text)
     if kind == "lsan":

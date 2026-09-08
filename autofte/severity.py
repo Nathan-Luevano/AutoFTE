@@ -65,6 +65,12 @@ BUG_CLASS_PROFILES = {
         "wild-pointer write, indistinguishable from this report alone",
         False,
     ),
+    "data-race": (
+        1.0,
+        "a data race -- usually a correctness bug, but occasionally a memory-safety issue "
+        "when the raced value is a pointer or size that later drives an access",
+        True,
+    ),
     "use-of-uninitialized-value": (
         0.5,
         "reads uninitialized memory -- can leak stale contents or, if the value reaches a "
