@@ -232,6 +232,15 @@ UBSAN_SIGNED_INTEGER_OVERFLOW = (
     "2147483647 + 1 cannot be represented in type 'int'\n"
 )
 
+UBSAN_WITH_STACKTRACE = (
+    "/x/parse.c:12:9: runtime error: signed integer overflow: "
+    "2147483647 + 1 cannot be represented in type 'int'\n"
+    "    #0 0x55d in add /x/parse.c:12\n"
+    "    #1 0x5a1 in run /x/parse.c:28\n"
+    "    #2 0x5f3 in main /x/main.c:5\n"
+    "SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /x/parse.c:12:9\n"
+)
+
 GDB_OUTPUT = """\
 Program received signal SIGSEGV, Segmentation fault.
 0x0000000000401136 in vuln (input=0x7fffffffe4d0 "AAAA") at vuln.c:8
@@ -474,6 +483,13 @@ def test_parse_ubsan_signed_integer_overflow():
     assert record["alloc_stack"] == []
     assert record["free_stack"] == []
     assert record["sanitizer_raw"] == UBSAN_SIGNED_INTEGER_OVERFLOW
+
+
+def test_parse_ubsan_collects_stacktrace_frames_when_present():
+    record = parse_ubsan(UBSAN_WITH_STACKTRACE)
+    funcs = [f["func"] for f in record["crash_stack"]]
+    assert funcs == ["add", "run", "main"]
+    assert record["crash_stack"][0]["line"] == 12
 
 
 def test_parse_ubsan_returns_none_for_non_ubsan_text():

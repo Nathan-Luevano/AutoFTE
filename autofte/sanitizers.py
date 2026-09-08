@@ -223,13 +223,17 @@ def parse_ubsan(text):
 
     file_name, line_number, _col, message = match.groups()
 
-    return {
-        "sanitizer": "UndefinedBehaviorSanitizer",
-        "bug_class": _ubsan_bug_class(message),
-        "access_type": None,
-        "access_size": None,
-        "fault_addr": None,
-        "crash_stack": [
+    crash_stack = []
+    tail = text[match.end():]
+    for raw_line in tail.splitlines():
+        frame = _parse_asan_frame(raw_line)
+        if frame is not None:
+            crash_stack.append(frame)
+        elif crash_stack:
+            break
+
+    if not crash_stack:
+        crash_stack = [
             {
                 "frame": 0,
                 "addr": None,
@@ -237,7 +241,15 @@ def parse_ubsan(text):
                 "file": file_name,
                 "line": int(line_number),
             }
-        ],
+        ]
+
+    return {
+        "sanitizer": "UndefinedBehaviorSanitizer",
+        "bug_class": _ubsan_bug_class(message),
+        "access_type": None,
+        "access_size": None,
+        "fault_addr": None,
+        "crash_stack": crash_stack,
         "alloc_stack": [],
         "free_stack": [],
         "sanitizer_raw": text,
