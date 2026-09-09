@@ -130,6 +130,29 @@ def test_render_table_lists_ranked_groups():
     assert lines[0].split()[1] == "Easy"
 
 
+def test_crash_state_primitives_surface_in_summary_and_renderers():
+    triage = {
+        "total_crashes": 1,
+        "unique_crash_frames": 1,
+        "groups": {
+            "smash": {
+                "count": 1,
+                "crashes": [{"file": "c1", "sanitizer": {"bug_class": "stack-buffer-overflow"}}],
+                "crash_state": {
+                    "primitives": ["return-address-overwrite"],
+                    "rationale": "ret with corrupted RA.",
+                },
+            }
+        },
+    }
+    result = build_summary("./t", "v.c", triage, {}, {})
+    group = result["groups"][0]
+    assert group["exploit_primitives"] == ["return-address-overwrite"]
+    assert "crash_state" in group["basis"] or "_and_crash_state" in group["basis"]
+    assert "return-address-overwrite" in render_table(result)
+    assert "return-address-overwrite" in render_csv(result)
+
+
 def test_render_csv_has_header_and_row_per_group():
     csv_text = render_csv(build_summary("./target", "vuln.c", _triage(), {}, {}))
     lines = csv_text.strip().splitlines()
@@ -142,7 +165,7 @@ def test_render_csv_empty_is_header_only():
     csv_text = render_csv(build_summary("./target", "vuln.c", {}, {}, {}))
     assert csv_text.strip().splitlines() == [",".join([
         "rank", "difficulty", "confidence", "score", "count", "reproducible_count",
-        "bug_class", "signature", "group_id", "sample_crash_file",
+        "bug_class", "exploit_primitives", "signature", "group_id", "sample_crash_file",
     ])]
 
 

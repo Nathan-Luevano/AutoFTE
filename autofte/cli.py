@@ -57,6 +57,7 @@ def cmd_triage(args):
             debugger=args.debugger,
             progress_callback=None if args.quiet else _print_progress,
             reproduction_runs=getattr(args, "reproduction_runs", DEFAULT_REPRODUCTION_RUNS),
+            capture_state=getattr(args, "crash_state", True),
         )
     except FileNotFoundError as exc:
         print(f"Error: {exc}")
@@ -129,9 +130,12 @@ def cmd_binscan(args):
     return 0
 
 
+def _top_group(triage_data):
+    return next(iter(triage_data.get("groups", {}).values()), None)
+
+
 def _top_group_crash_record(triage_data):
-    groups = triage_data.get("groups", {})
-    first_group = next(iter(groups.values()), None)
+    first_group = _top_group(triage_data)
     if not first_group:
         return None
     return crash_display.representative_crash_record(first_group)
@@ -161,7 +165,9 @@ def cmd_llm(args):
         print(message)
         return 1
 
-    crash_record = _top_group_crash_record(triage_data)
+    top_group = _top_group(triage_data)
+    crash_record = crash_display.representative_crash_record(top_group) if top_group else None
+    crash_state = (top_group or {}).get("crash_state")
 
     source_code = None
     if args.source_file and Path(args.source_file).exists():
@@ -169,7 +175,9 @@ def cmd_llm(args):
 
     severity_assessment = None
     if binary_analysis is not None:
-        severity_assessment = severity.assess_crash_difficulty(binary_analysis, crash_record)
+        severity_assessment = severity.assess_crash_difficulty(
+            binary_analysis, crash_record, crash_state=crash_state
+        )
 
     disassembly = None
     target_binary = getattr(args, "target_binary", None)
@@ -414,6 +422,7 @@ def cmd_pipeline(args):
         output=args.triage_json,
         quiet=args.quiet,
         reproduction_runs=getattr(args, "reproduction_runs", DEFAULT_REPRODUCTION_RUNS),
+        crash_state=getattr(args, "crash_state", True),
     )
     if cmd_triage(triage_ns) != 0:
         return 1
@@ -642,23 +651,11 @@ def _pick_headline_group(binary_data, groups):
     This is `cmd_demo`'s own presentation choice; it does not change `groups`'
     underlying count-based ordering in `triage.py`, `report.py`, or `dashboard.py`.
     """
-    if not groups:
+    ranked = crash_display.ranked_groups(groups, binary_data)
+    if not ranked:
         return None, None, None
-
-    ranked = []
-    for label, group in groups.items():
-        crash_record = None
-        for crash in group.get("crashes", []):
-            record = crash.get("sanitizer")
-            if record:
-                crash_record = record
-                break
-        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
-        ranked.append((assessment["score"], -group.get("count", 0), label, group, assessment))
-
-    ranked.sort(key=lambda item: (item[0], item[1]))
-    _score, _neg_count, label, group, assessment = ranked[0]
-    return label, group, assessment
+    top = ranked[0]
+    return top["signature"], top["data"], top["assessment"]
 
 
 def cmd_demo(args):
@@ -717,7 +714,10 @@ def cmd_demo(args):
         summary_md=summary_md,
         dashboard_dir=dashboard_dir,
         sarif=None,
+        summary_json=None,
+        fail_on_difficulty=None,
         reproduction_runs=DEMO_REPRODUCTION_RUNS,
+        crash_state=True,
     )
     if cmd_pipeline(pipeline_ns) != 0:
         return 1
@@ -774,7 +774,14 @@ def build_parser():
             f"(default {DEFAULT_REPRODUCTION_RUNS}); 1 disables verification for speed"
         ),
     )
-    p_triage.set_defaults(func=cmd_triage)
+    p_triage.add_argument(
+        "--no-crash-state",
+        dest="crash_state",
+        action="store_false",
+        help="Skip the per-group gdb crash-state capture (registers, faulting instruction, "
+        "exploit primitives)",
+    )
+    p_triage.set_defaults(func=cmd_triage, crash_state=True)
 
     p_binscan = subparsers.add_parser(
         "binscan", help="Check a binary's exploit mitigations (NX, PIE, RELRO, ...)"
@@ -937,6 +944,12 @@ def build_parser():
             f"(default {DEFAULT_REPRODUCTION_RUNS}); 1 disables verification for speed"
         ),
     )
+    p_pipeline.add_argument(
+        "--no-crash-state",
+        dest="crash_state",
+        action="store_false",
+        help="Skip the per-group gdb crash-state capture",
+    )
     p_pipeline.add_argument("--triage-json", default="crash_triage.json")
     p_pipeline.add_argument("--binary-analysis", default="binary_analysis.json")
     p_pipeline.add_argument("--llm-analysis", default="llm_analysis.json")
@@ -955,7 +968,7 @@ def build_parser():
         choices=("easy", "medium", "hard"),
         help="Exit non-zero if any crash group is at or above this exploit difficulty",
     )
-    p_pipeline.set_defaults(func=cmd_pipeline)
+    p_pipeline.set_defaults(func=cmd_pipeline, crash_state=True)
 
     p_demo = subparsers.add_parser(
         "demo",

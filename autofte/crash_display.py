@@ -25,12 +25,15 @@ def ranked_groups(groups, binary_data):
     ranked = []
     for signature, data in (groups or {}).items():
         crash_record = representative_crash_record(data)
-        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
+        assessment = severity.assess_crash_difficulty(
+            binary_data, crash_record, crash_state=data.get("crash_state")
+        )
         ranked.append(
             {
                 "signature": signature,
                 "data": data,
                 "crash_record": crash_record,
+                "crash_state": data.get("crash_state"),
                 "assessment": assessment,
                 "count": data.get("count", 0),
             }

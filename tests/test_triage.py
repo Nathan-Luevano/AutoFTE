@@ -199,6 +199,38 @@ def test_triage_crashes_ignores_readme(crashes_dir, make_executable, monkeypatch
     assert result["triage_mode"] == "direct"
 
 
+def test_triage_crashes_attaches_crash_state_when_enabled(
+    crashes_dir, make_executable, monkeypatch
+):
+    binary = make_executable()
+    (crashes_dir / "crash1").write_bytes(b"A" * 10)
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+    monkeypatch.setattr(triage, "run_direct", lambda binary, crash_file: "SIGSEGV")
+    monkeypatch.setattr(triage.crash_state, "gdb_available", lambda debugger="gdb": True)
+    captured = {"primitives": ["memory-write"], "rationale": "writes through bad ptr."}
+    monkeypatch.setattr(triage.crash_state, "capture", lambda *a, **k: dict(captured))
+
+    result = triage_crashes(str(crashes_dir), str(binary), capture_state=True)
+    group = next(iter(result["groups"].values()))
+    assert group["crash_state"]["primitives"] == ["memory-write"]
+
+
+def test_triage_crashes_skips_crash_state_by_default(crashes_dir, make_executable, monkeypatch):
+    binary = make_executable()
+    (crashes_dir / "crash1").write_bytes(b"A" * 10)
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+    monkeypatch.setattr(triage, "run_direct", lambda binary, crash_file: "SIGSEGV")
+
+    def boom(*a, **k):
+        raise AssertionError("crash_state.capture should not run when capture_state is False")
+
+    monkeypatch.setattr(triage.crash_state, "capture", boom)
+    result = triage_crashes(str(crashes_dir), str(binary))
+    group = next(iter(result["groups"].values()))
+    assert "crash_state" not in group
+
+
 def test_triage_crashes_groups_by_signature_direct_mode(crashes_dir, make_executable, monkeypatch):
     binary = make_executable()
     (crashes_dir / "crash1").write_bytes(b"A" * 10)

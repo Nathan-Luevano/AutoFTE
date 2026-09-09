@@ -78,6 +78,10 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data, max_
             if crashes and any("reproducibility" in c for c in crashes):
                 lines.append(f"- Reproducible: {reproducible}/{len(crashes)}")
 
+            primitives = (item.get("crash_state") or {}).get("primitives") or []
+            if primitives:
+                lines.append(f"- Exploit primitives (from crash state): {', '.join(primitives)}")
+
             lines.append(
                 f"- Difficulty: **{assessment['difficulty']}** "
                 f"(confidence {assessment['confidence']:.2f})"

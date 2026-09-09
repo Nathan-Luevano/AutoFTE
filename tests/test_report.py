@@ -109,6 +109,26 @@ def test_build_report_limits_to_five_groups():
     assert shown == 5
 
 
+def test_build_report_shows_exploit_primitives_from_crash_state():
+    triage = {
+        "total_crashes": 1,
+        "unique_crash_frames": 1,
+        "groups": {
+            "smash": {
+                "count": 1,
+                "crashes": [{"file": "c1", "sanitizer": {"bug_class": "stack-buffer-overflow"}}],
+                "crash_state": {
+                    "primitives": ["return-address-overwrite"],
+                    "rationale": "ret with corrupted RA.",
+                },
+            }
+        },
+    }
+    text = build_report("./target", "vuln.c", triage, {}, {})
+    assert "- Exploit primitives (from crash state): return-address-overwrite" in text
+    assert "Observed directly from the crashed process" in text
+
+
 def test_build_report_shows_reproducibility_when_present():
     triage = {
         "total_crashes": 3,

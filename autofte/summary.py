@@ -12,6 +12,7 @@ CSV_COLUMNS = (
     "count",
     "reproducible_count",
     "bug_class",
+    "exploit_primitives",
     "signature",
     "group_id",
     "sample_crash_file",
@@ -90,6 +91,9 @@ def _group_entries(triage, binary_data):
                 "score": assessment["score"],
                 "basis": assessment["basis"],
                 "rationale": assessment["rationale"],
+                "exploit_primitives": list(
+                    (item.get("crash_state") or {}).get("primitives") or []
+                ),
             }
         )
     return entries
@@ -128,6 +132,9 @@ def render_table(summary):
         return "\n".join(lines)
     for group in groups:
         bug = group.get("bug_class_label") or group.get("signature") or "unknown"
+        primitives = group.get("exploit_primitives") or []
+        if primitives:
+            bug = f"{bug}  [{', '.join(primitives)}]"
         lines.append(
             f"{group.get('rank', 0):>2}  {group.get('difficulty', '?'):<10} "
             f"{group.get('confidence', 0):>5.2f} {group.get('count', 0):>6}  {bug}"
@@ -148,7 +155,9 @@ def render_csv(summary):
     writer = csv.DictWriter(buffer, fieldnames=CSV_COLUMNS, extrasaction="ignore")
     writer.writeheader()
     for group in summary.get("groups", []):
-        writer.writerow({key: group.get(key, "") for key in CSV_COLUMNS})
+        row = {key: group.get(key, "") for key in CSV_COLUMNS}
+        row["exploit_primitives"] = " ".join(group.get("exploit_primitives") or [])
+        writer.writerow(row)
     return buffer.getvalue()
 
 

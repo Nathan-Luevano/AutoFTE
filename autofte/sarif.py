@@ -173,9 +173,12 @@ def build_sarif(triage, binary_data, llm_data=None, target_binary=None):
 
     for label, group_data in groups.items():
         crash_record = crash_display.representative_crash_record(group_data)
+        group_crash_state = group_data.get("crash_state")
         heading = _bug_class_heading(label, crash_record)
         rule_id = _rule_id(label, crash_record)
-        assessment = severity.assess_crash_difficulty(binary_data, crash_record)
+        assessment = severity.assess_crash_difficulty(
+            binary_data, crash_record, crash_state=group_crash_state
+        )
         level = _map_level(assessment["difficulty"], assessment["confidence"])
 
         if rule_id not in rules_by_id:
@@ -187,17 +190,22 @@ def build_sarif(triage, binary_data, llm_data=None, target_binary=None):
             rule["properties"] = rule_properties
             rules_by_id[rule_id] = rule
 
+        properties = {
+            "confidence": assessment["confidence"],
+            "crash_count": group_data.get("count", 0),
+            "basis": assessment["basis"],
+            "difficulty": assessment["difficulty"],
+        }
+        primitives = list((group_crash_state or {}).get("primitives") or [])
+        if primitives:
+            properties["exploit_primitives"] = primitives
+
         result = {
             "ruleId": rule_id,
             "level": level,
             "message": {"text": _build_message(heading, assessment, llm_data)},
             "locations": [_build_location(label, crash_record, target_binary)],
-            "properties": {
-                "confidence": assessment["confidence"],
-                "crash_count": group_data.get("count", 0),
-                "basis": assessment["basis"],
-                "difficulty": assessment["difficulty"],
-            },
+            "properties": properties,
         }
         group_id = group_data.get("group_id")
         if group_id:

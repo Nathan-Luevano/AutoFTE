@@ -38,6 +38,11 @@ def _group_row(rank, frame, data, assessment):
     else:
         signature_html = f"<strong>{html.escape(frame)}</strong>"
 
+    primitives = (data.get("crash_state") or {}).get("primitives") or []
+    if primitives:
+        joined = html.escape(", ".join(primitives))
+        signature_html += f'<br><span class="primitive">{joined}</span>'
+
     crashes = data.get("crashes", [])
     count_html = str(data.get("count", 0))
     if crashes and any("reproducibility" in c for c in crashes):
@@ -180,6 +185,15 @@ def build_html(triage, binary_data, llm_data, max_groups=None):
     }}
     th {{ background: var(--accent-soft); font-weight: 600; }}
     ul {{ margin: 10px 0 0; padding-left: 18px; }}
+    .primitive {{
+      display: inline-block;
+      margin-top: 4px;
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: #7b2a2a;
+      color: #fff;
+      font-size: 0.78rem;
+    }}
     pre {{
       background: #f3ede2;
       border: 1px solid var(--line);

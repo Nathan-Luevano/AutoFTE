@@ -79,6 +79,30 @@ def test_build_html_group_rows_limited_to_eight():
     assert shown == 8
 
 
+def test_build_html_shows_exploit_primitives_badge():
+    triage = {
+        "groups": {
+            "smash": {
+                "count": 1,
+                "crashes": [
+                    {
+                        "file": "c1",
+                        "size": 1,
+                        "sanitizer": {"bug_class": "stack-buffer-overflow"},
+                    }
+                ],
+                "crash_state": {
+                    "primitives": ["indirect-branch-through-register"],
+                    "rationale": "x",
+                },
+            }
+        }
+    }
+    html = build_html(triage, {}, {})
+    assert "indirect-branch-through-register" in html
+    assert 'class="primitive"' in html
+
+
 def test_build_html_shows_reproducibility_in_count_cell():
     triage = {
         "groups": {
