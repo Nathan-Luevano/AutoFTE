@@ -131,6 +131,15 @@ DEFAULT_BUG_CLASS_PROFILE = (
 
 ACCESS_TYPE_DELTA = {"write": -0.5, "read": 0.5}
 
+CRASH_STATE_PRIMITIVE_DELTA = {
+    "instruction-pointer-control": -3.0,
+    "return-address-overwrite": -2.5,
+    "indirect-branch-through-register": -2.0,
+    "memory-write": -1.5,
+    "memory-read": 0.5,
+}
+CRASH_STATE_CONFIDENCE_BONUS = 0.15
+
 LARGE_ACCESS_SIZE = 16
 LARGE_ACCESS_DELTA = -0.3
 SINGLE_BYTE_ACCESS_DELTA = 0.2
@@ -302,7 +311,37 @@ def _score_crash_record(binary_analysis, crash_record):
     return delta, fault_summary, fault_fragments, confidence, would_increase, would_decrease
 
 
-def assess_crash_difficulty(binary_analysis, crash_record=None):
+def _apply_crash_state(crash_state, score, confidence, rationale, would_increase, would_decrease):
+    primitives = list((crash_state or {}).get("primitives") or [])
+    if not primitives:
+        would_increase.append(
+            "A captured crash state (registers/faulting instruction) exposing an "
+            "exploitation primitive -- none was observed here"
+        )
+        return score, confidence, rationale, "crash_state_none"
+
+    strongest = min(primitives, key=lambda p: CRASH_STATE_PRIMITIVE_DELTA.get(p, 0.0))
+    score += CRASH_STATE_PRIMITIVE_DELTA.get(strongest, 0.0)
+    confidence += CRASH_STATE_CONFIDENCE_BONUS
+    rationale = (
+        rationale
+        + " "
+        + crash_state.get("rationale", "")
+        + " (Observed directly from the crashed process, not inferred.)"
+    )
+    if strongest in (
+        "instruction-pointer-control",
+        "return-address-overwrite",
+        "indirect-branch-through-register",
+    ):
+        would_decrease.append(
+            "The captured crash state shows a control-flow primitive; treat the low "
+            "difficulty as a priority signal, not a guarantee of a working exploit"
+        )
+    return score, confidence, rationale, "crash_state"
+
+
+def assess_crash_difficulty(binary_analysis, crash_record=None, crash_state=None):
     """Fuse `binary_analysis`'s mitigation posture with an optional normalized
     sanitizer `crash_record` (see `sanitizers.py`) into one prioritization
     signal: `{difficulty, confidence, rationale, would_increase_confidence,
@@ -312,8 +351,16 @@ def assess_crash_difficulty(binary_analysis, crash_record=None):
     gdb backtrace or exit-signal grouping) still gets a full, honestly
     lower-confidence assessment from mitigation posture alone, in the exact
     same return shape, so callers never have to branch on which case they
-    got. This is a heuristic prioritization aid, like `exploitable` -- never
-    a verdict.
+    got.
+
+    `crash_state` is the optional `crash_state.py` capture (registers +
+    faulting instruction + detected primitives from the actual crashed
+    process). When it exposes a primitive it shifts the score directly and
+    raises confidence, because it is a direct observation rather than an
+    inference -- `basis` gains a `_and_crash_state` suffix to say so.
+
+    This is a heuristic prioritization aid, like `exploitable` -- never a
+    verdict.
     """
     mitigation_summary = binary_analysis.get("exploit_mitigation_summary") or {}
     protection_count = float(mitigation_summary.get("protection_count", 0) or 0)
@@ -373,6 +420,13 @@ def assess_crash_difficulty(binary_analysis, crash_record=None):
             "heuristic prioritization aid, not a verdict -- read the difficulty label and "
             "confidence the way you would (skeptically) read `exploitable`'s output."
         )
+
+    if crash_state is not None:
+        score, confidence, rationale, state_basis = _apply_crash_state(
+            crash_state, score, confidence, rationale, would_increase, would_decrease
+        )
+        if state_basis == "crash_state":
+            basis = f"{basis}_and_crash_state"
 
     for key, error in tool_errors:
         confidence -= 0.05

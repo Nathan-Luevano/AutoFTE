@@ -41,7 +41,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import dedup, sanitizers
+from . import crash_state, dedup, sanitizers
 
 GDB_TIMEOUT_SECONDS = 10
 DIRECT_RUN_TIMEOUT_SECONDS = 10
@@ -379,12 +379,27 @@ def _empty_reproduction_summary():
     }
 
 
+def _attach_crash_state(final_groups, binary, debugger):
+    for group in final_groups.values():
+        target = None
+        for crash in group.get("crashes", []):
+            if crash.get("path"):
+                target = crash["path"]
+                break
+        if not target:
+            continue
+        state = crash_state.capture(str(binary), target, debugger=debugger)
+        if state:
+            group["crash_state"] = state
+
+
 def triage_crashes(
     crashes_dir,
     target_binary,
     debugger="gdb",
     progress_callback=None,
     reproduction_runs=DEFAULT_REPRODUCTION_RUNS,
+    capture_state=False,
 ):
     crash_dir = Path(crashes_dir)
     binary = Path(target_binary)
@@ -504,6 +519,9 @@ def triage_crashes(
             "group_id": f"{kind}:{value}",
             "crashes": sorted(bucket["entries"], key=lambda item: item["size"]),
         }
+
+    if capture_state and crash_state.gdb_available(debugger):
+        _attach_crash_state(final_groups, binary, debugger)
 
     total_crashes = sum(len(bucket["entries"]) for bucket in groups.values())
 
