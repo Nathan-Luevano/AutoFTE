@@ -197,6 +197,7 @@ def cmd_llm(args):
             binary_analysis,
             severity_assessment=severity_assessment,
             disassembly=disassembly,
+            crash_state=crash_state,
         )
     except LLMResponseError as exc:
         print(f"Error: {exc}")

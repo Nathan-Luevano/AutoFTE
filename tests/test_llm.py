@@ -511,6 +511,29 @@ def test_build_prompt_omits_severity_evidence_when_not_supplied():
     assert "severity.py:" not in prompt
 
 
+def test_build_prompt_includes_crash_state_evidence():
+    crash_state = {
+        "signal": "SIGSEGV",
+        "pc": "0x4011bb",
+        "pc_symbol": "parse+37",
+        "faulting_instruction": "ret",
+        "return_address": "0x4141414141414141",
+        "frame_pointer": "0x4141414141414141",
+        "primitives": ["return-address-overwrite"],
+    }
+    prompt = build_prompt(_triage_data_with_sanitizer_record(), crash_state=crash_state)
+    assert "crash signal: SIGSEGV" in prompt
+    assert "faulting instruction: ret at parse+37" in prompt
+    assert "crash-state return_address: 0x4141414141414141" in prompt
+    assert "exploitation primitive observed in crashed process: return-address-overwrite" in prompt
+
+
+def test_build_prompt_omits_crash_state_evidence_when_not_supplied():
+    prompt = build_prompt(_triage_data_with_sanitizer_record())
+    assert "crash signal:" not in prompt
+    assert "exploitation primitive observed" not in prompt
+
+
 def test_build_prompt_includes_disassembly_when_given():
     prompt = build_prompt(
         _triage_data_with_sanitizer_record(), disassembly="0x401196: mov eax, [rbp-0x8]"

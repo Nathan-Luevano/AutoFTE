@@ -689,12 +689,28 @@ def _evidence_completeness(crash_record, source_code, disassembly):
     return min(score, 1.0)
 
 
+def _mint_crash_state_evidence(ledger, crash_state):
+    if crash_state.get("signal"):
+        ledger.add(f"crash signal: {crash_state['signal']}")
+    if crash_state.get("faulting_instruction"):
+        location = crash_state.get("pc_symbol") or crash_state.get("pc") or "unknown"
+        ledger.add(
+            f"faulting instruction: {crash_state['faulting_instruction']} at {location}"
+        )
+    for key in ("pc", "return_address", "frame_pointer"):
+        if crash_state.get(key):
+            ledger.add(f"crash-state {key}: {crash_state[key]}")
+    for primitive in crash_state.get("primitives") or []:
+        ledger.add(f"exploitation primitive observed in crashed process: {primitive}")
+
+
 def _assemble_prompt(
     triage_data,
     source_code=None,
     binary_analysis=None,
     severity_assessment=None,
     disassembly=None,
+    crash_state=None,
 ):
     ledger = EvidenceLedger()
     groups = triage_data.get("groups", {})
@@ -741,6 +757,8 @@ def _assemble_prompt(
         bug_class_id = _mint_crash_record_evidence(ledger, crash_record)
     if binary_analysis:
         _mint_binary_analysis_evidence(ledger, binary_analysis)
+    if crash_state:
+        _mint_crash_state_evidence(ledger, crash_state)
     if severity_assessment:
         _mint_severity_evidence(ledger, severity_assessment)
     if source_code:
@@ -786,9 +804,15 @@ def build_prompt(
     binary_analysis=None,
     severity_assessment=None,
     disassembly=None,
+    crash_state=None,
 ):
     prompt, _ledger = _assemble_prompt(
-        triage_data, source_code, binary_analysis, severity_assessment, disassembly
+        triage_data,
+        source_code,
+        binary_analysis,
+        severity_assessment,
+        disassembly,
+        crash_state,
     )
     return prompt
 
@@ -1110,6 +1134,7 @@ def analyze(
     binary_analysis=None,
     severity_assessment=None,
     disassembly=None,
+    crash_state=None,
     self_consistency=False,
 ):
     prompt, ledger = _assemble_prompt(
@@ -1118,6 +1143,7 @@ def analyze(
         binary_analysis,
         severity_assessment=severity_assessment,
         disassembly=disassembly,
+        crash_state=crash_state,
     )
     _group_data, crash_record = _find_representative_crash_record(triage_data)
     completeness = _evidence_completeness(crash_record, source_code, disassembly)
