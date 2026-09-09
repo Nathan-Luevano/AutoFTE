@@ -379,6 +379,31 @@ def _empty_reproduction_summary():
     }
 
 
+def _safe_name(text):
+    return "".join(c if c.isalnum() or c in "-_." else "_" for c in text)[:80] or "group"
+
+
+def _minimize_groups(final_groups, binary, debugger, output_dir):
+    from . import minimize
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for label, group in final_groups.items():
+        target = None
+        for crash in group.get("crashes", []):
+            if crash.get("path"):
+                target = crash["path"]
+                break
+        if not target:
+            continue
+        dest = out / f"{_safe_name(group.get('group_id') or label)}.min"
+        result = minimize.minimize_file(
+            str(binary), target, output_path=str(dest), debugger=debugger
+        )
+        if result:
+            group["minimized"] = result
+
+
 def _attach_crash_state(final_groups, binary, debugger):
     for group in final_groups.values():
         target = None
@@ -400,6 +425,8 @@ def triage_crashes(
     progress_callback=None,
     reproduction_runs=DEFAULT_REPRODUCTION_RUNS,
     capture_state=False,
+    minimize_crashes=False,
+    minimize_output_dir=None,
 ):
     crash_dir = Path(crashes_dir)
     binary = Path(target_binary)
@@ -522,6 +549,9 @@ def triage_crashes(
 
     if capture_state and crash_state.gdb_available(debugger):
         _attach_crash_state(final_groups, binary, debugger)
+
+    if minimize_crashes and minimize_output_dir:
+        _minimize_groups(final_groups, binary, debugger, minimize_output_dir)
 
     total_crashes = sum(len(bucket["entries"]) for bucket in groups.values())
 

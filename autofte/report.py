@@ -82,6 +82,15 @@ def build_report(target_binary, source_file, triage, binary_data, llm_data, max_
             if primitives:
                 lines.append(f"- Exploit primitives (from crash state): {', '.join(primitives)}")
 
+            minimized = data.get("minimized")
+            if minimized:
+                lines.append(
+                    f"- Minimized PoC: {minimized['original_size']} -> "
+                    f"{minimized['minimized_size']} bytes "
+                    f"({minimized['reduction_percent']}% smaller, {minimized['tool']})"
+                    + (f" -- `{minimized['output_path']}`" if minimized.get("output_path") else "")
+                )
+
             lines.append(
                 f"- Difficulty: **{assessment['difficulty']}** "
                 f"(confidence {assessment['confidence']:.2f})"

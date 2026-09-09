@@ -59,6 +59,8 @@ def cmd_triage(args):
             progress_callback=None if args.quiet else _print_progress,
             reproduction_runs=getattr(args, "reproduction_runs", DEFAULT_REPRODUCTION_RUNS),
             capture_state=getattr(args, "crash_state", True),
+            minimize_crashes=getattr(args, "minimize", False),
+            minimize_output_dir=getattr(args, "minimize_dir", "minimized"),
         )
     except FileNotFoundError as exc:
         print(f"Error: {exc}")
@@ -461,6 +463,8 @@ def cmd_pipeline(args):
         quiet=args.quiet,
         reproduction_runs=getattr(args, "reproduction_runs", DEFAULT_REPRODUCTION_RUNS),
         crash_state=getattr(args, "crash_state", True),
+        minimize=getattr(args, "minimize", False),
+        minimize_dir=getattr(args, "minimize_dir", "minimized"),
     )
     if cmd_triage(triage_ns) != 0:
         return 1
@@ -819,6 +823,16 @@ def build_parser():
         help="Skip the per-group gdb crash-state capture (registers, faulting instruction, "
         "exploit primitives)",
     )
+    p_triage.add_argument(
+        "--minimize",
+        action="store_true",
+        help="Minimize a representative crash of each group (writes to --minimize-dir)",
+    )
+    p_triage.add_argument(
+        "--minimize-dir",
+        default="minimized",
+        help="Directory for minimized crash inputs (with --minimize)",
+    )
     p_triage.set_defaults(func=cmd_triage, crash_state=True)
 
     p_minimize = subparsers.add_parser(
@@ -1007,6 +1021,12 @@ def build_parser():
         action="store_false",
         help="Skip the per-group gdb crash-state capture",
     )
+    p_pipeline.add_argument(
+        "--minimize",
+        action="store_true",
+        help="Minimize a representative crash of each group into --minimize-dir",
+    )
+    p_pipeline.add_argument("--minimize-dir", default="minimized")
     p_pipeline.add_argument("--triage-json", default="crash_triage.json")
     p_pipeline.add_argument("--binary-analysis", default="binary_analysis.json")
     p_pipeline.add_argument("--llm-analysis", default="llm_analysis.json")
@@ -1025,7 +1045,7 @@ def build_parser():
         choices=("easy", "medium", "hard"),
         help="Exit non-zero if any crash group is at or above this exploit difficulty",
     )
-    p_pipeline.set_defaults(func=cmd_pipeline, crash_state=True)
+    p_pipeline.set_defaults(func=cmd_pipeline, crash_state=True, minimize=False)
 
     p_demo = subparsers.add_parser(
         "demo",

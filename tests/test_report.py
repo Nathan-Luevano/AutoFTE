@@ -129,6 +129,29 @@ def test_build_report_shows_exploit_primitives_from_crash_state():
     assert "Observed directly from the crashed process" in text
 
 
+def test_build_report_shows_minimized_poc_when_present():
+    triage = {
+        "total_crashes": 1,
+        "unique_crash_frames": 1,
+        "groups": {
+            "smash": {
+                "count": 1,
+                "crashes": [{"file": "c1"}],
+                "minimized": {
+                    "tool": "ddmin",
+                    "original_size": 140,
+                    "minimized_size": 40,
+                    "reduction_percent": 71.4,
+                    "output_path": "minimized/hash_abc.min",
+                },
+            }
+        },
+    }
+    text = build_report("./target", "vuln.c", triage, {}, {})
+    assert "- Minimized PoC: 140 -> 40 bytes (71.4% smaller, ddmin)" in text
+    assert "minimized/hash_abc.min" in text
+
+
 def test_build_report_shows_reproducibility_when_present():
     triage = {
         "total_crashes": 3,

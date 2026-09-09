@@ -216,6 +216,43 @@ def test_triage_crashes_attaches_crash_state_when_enabled(
     assert group["crash_state"]["primitives"] == ["memory-write"]
 
 
+def test_triage_crashes_minimizes_groups_when_requested(
+    crashes_dir, make_executable, monkeypatch, tmp_path
+):
+    binary = make_executable()
+    (crashes_dir / "crash1").write_bytes(b"A" * 30)
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+    monkeypatch.setattr(triage, "run_direct", lambda binary, crash_file: "SIGSEGV")
+
+    from autofte import minimize as minimize_mod
+
+    def fake_minimize_file(bin_path, crash_path, output_path=None, **kwargs):
+        if output_path:
+            open(output_path, "wb").write(b"A")
+        return {
+            "tool": "ddmin",
+            "original_size": 30,
+            "minimized_size": 1,
+            "reduction_percent": 96.7,
+            "output_path": output_path,
+            "signature": ["signal", "SIGSEGV"],
+        }
+
+    monkeypatch.setattr(minimize_mod, "minimize_file", fake_minimize_file)
+
+    out_dir = tmp_path / "min"
+    result = triage_crashes(
+        str(crashes_dir),
+        str(binary),
+        minimize_crashes=True,
+        minimize_output_dir=str(out_dir),
+    )
+    group = next(iter(result["groups"].values()))
+    assert group["minimized"]["minimized_size"] == 1
+    assert out_dir.is_dir()
+
+
 def test_triage_crashes_skips_crash_state_by_default(crashes_dir, make_executable, monkeypatch):
     binary = make_executable()
     (crashes_dir / "crash1").write_bytes(b"A" * 10)

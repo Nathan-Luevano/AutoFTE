@@ -103,6 +103,20 @@ def test_build_html_shows_exploit_primitives_badge():
     assert 'class="primitive"' in html
 
 
+def test_build_html_shows_minimized_size_when_present():
+    triage = {
+        "groups": {
+            "smash": {
+                "count": 1,
+                "crashes": [{"file": "c1", "size": 1}],
+                "minimized": {"original_size": 140, "minimized_size": 40},
+            }
+        }
+    }
+    html = build_html(triage, {}, {})
+    assert "minimized 140" in html and "40 B" in html
+
+
 def test_build_html_shows_reproducibility_in_count_cell():
     triage = {
         "groups": {

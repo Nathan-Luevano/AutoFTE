@@ -43,6 +43,13 @@ def _group_row(rank, frame, data, assessment):
         joined = html.escape(", ".join(primitives))
         signature_html += f'<br><span class="primitive">{joined}</span>'
 
+    minimized = data.get("minimized")
+    if minimized:
+        signature_html += (
+            f'<br><span class="muted">minimized {minimized["original_size"]}'
+            f'&rarr;{minimized["minimized_size"]} B</span>'
+        )
+
     crashes = data.get("crashes", [])
     count_html = str(data.get("count", 0))
     if crashes and any("reproducibility" in c for c in crashes):

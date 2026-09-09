@@ -94,6 +94,7 @@ def _group_entries(triage, binary_data):
                 "exploit_primitives": list(
                     (item.get("crash_state") or {}).get("primitives") or []
                 ),
+                "minimized": data.get("minimized"),
             }
         )
     return entries
