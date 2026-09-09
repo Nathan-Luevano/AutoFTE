@@ -4,6 +4,25 @@ All notable changes to AutoFTE are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-09
+
+### Added
+- **Crash-state exploitability analysis** (`autofte/crash_state.py`): a
+  representative crash of each group is re-run under GDB, and the actual
+  crashed process is read -- signal, registers, the faulting instruction,
+  and the corrupted return address / frame pointer -- to detect
+  `exploitable`-style exploitation primitives: `instruction-pointer-control`,
+  `return-address-overwrite`, `indirect-branch-through-register`,
+  `memory-write`, `memory-read`.
+- The detected primitive is **fused into the severity score** (a strong,
+  direct-observation signal that also raises confidence; `basis` gains an
+  `_and_crash_state` suffix), surfaced in the markdown report, HTML
+  dashboard, `summary` (table + JSON + CSV), and SARIF
+  (`properties.exploit_primitives`), and fed to the LLM prompt as cited
+  evidence (registers, faulting instruction, primitives).
+- `autofte triage` / `autofte pipeline` gain `--no-crash-state` to skip the
+  per-group GDB capture (it is on by default).
+
 ## [0.4.0] - 2026-09-08
 
 ### Added
