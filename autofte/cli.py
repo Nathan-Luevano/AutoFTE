@@ -23,6 +23,7 @@ from . import (
     dashboard,
     disasm,
     doctor,
+    minimize,
     report,
     sarif,
     severity,
@@ -292,6 +293,42 @@ def cmd_summary(args):
         hits = summary.groups_at_or_above(data, args.fail_on_difficulty)
         if hits:
             return 2
+    return 0
+
+
+def cmd_minimize(args):
+    crash_file = Path(args.crash_file)
+    if not crash_file.is_file():
+        print(f"Error: crash file not found: {crash_file}")
+        return 1
+    if not Path(args.target_binary).exists():
+        print(f"Error: target binary not found: {args.target_binary}")
+        return 1
+
+    output_path = args.output or str(crash_file) + ".min"
+    if not args.quiet:
+        print(f"Minimizing {crash_file} against {args.target_binary} ...")
+
+    result = minimize.minimize_file(
+        args.target_binary,
+        str(crash_file),
+        output_path=output_path,
+        debugger=args.debugger,
+        use_afl_tmin=args.use_afl_tmin,
+    )
+    if result is None:
+        print("Error: the input does not reproduce a crash on this target")
+        return 1
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0
+
+    print(
+        f"{result['tool']}: {result['original_size']} -> {result['minimized_size']} bytes "
+        f"({result['reduction_percent']}% smaller)"
+    )
+    print(f"Wrote {output_path}")
     return 0
 
 
@@ -783,6 +820,25 @@ def build_parser():
         "exploit primitives)",
     )
     p_triage.set_defaults(func=cmd_triage, crash_state=True)
+
+    p_minimize = subparsers.add_parser(
+        "minimize", help="Shrink a crash input to the smallest bytes that still reproduce it"
+    )
+    p_minimize.add_argument("crash_file")
+    p_minimize.add_argument("--target-binary", default="./target")
+    p_minimize.add_argument("--debugger", default="gdb")
+    p_minimize.add_argument(
+        "--output", help="Where to write the minimized input (default: <crash_file>.min)"
+    )
+    p_minimize.add_argument(
+        "--no-afl-tmin",
+        dest="use_afl_tmin",
+        action="store_false",
+        help="Use only the built-in reducer, even if afl-tmin is installed",
+    )
+    p_minimize.add_argument("--json", action="store_true", help="Print the result as JSON")
+    p_minimize.add_argument("--quiet", action="store_true")
+    p_minimize.set_defaults(func=cmd_minimize, use_afl_tmin=True)
 
     p_binscan = subparsers.add_parser(
         "binscan", help="Check a binary's exploit mitigations (NX, PIE, RELRO, ...)"

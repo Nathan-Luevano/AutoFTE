@@ -13,6 +13,7 @@ SUBCOMMANDS_MIN_ARGS = {
     "llm": [],
     "report": [],
     "summary": [],
+    "minimize": ["some-crash-file"],
     "dashboard": [],
     "crash-info": [],
     "doctor": [],
@@ -487,6 +488,45 @@ def test_cmd_llm_client_check_failure(tmp_path, monkeypatch, capsys):
     rc = cli.main(["llm", "--triage-json", "triage.json"])
     assert rc == 1
     assert "not reachable" in capsys.readouterr().out
+
+
+def test_cmd_minimize_writes_smaller_input(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    crash = tmp_path / "crash"
+    crash.write_bytes(b"PADDING" + b"BUG" + b"MOREPAD")
+    binary = tmp_path / "target"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+
+    monkeypatch.setattr(cli.minimize, "afl_tmin_available", lambda: False)
+    monkeypatch.setattr(
+        cli.minimize,
+        "crash_signature",
+        lambda b, p, debugger="gdb": ("signal", "SIGSEGV")
+        if b"BUG" in open(p, "rb").read()
+        else None,
+    )
+
+    rc = cli.main(
+        ["minimize", str(crash), "--target-binary", str(binary), "--output", "out.min"]
+    )
+    assert rc == 0
+    assert (tmp_path / "out.min").read_bytes() == b"BUG"
+    assert "smaller" in capsys.readouterr().out
+
+
+def test_cmd_minimize_non_crashing_input_errors(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    crash = tmp_path / "crash"
+    crash.write_bytes(b"abc")
+    binary = tmp_path / "target"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    monkeypatch.setattr(cli.minimize, "crash_signature", lambda *a, **k: None)
+
+    rc = cli.main(["minimize", str(crash), "--target-binary", str(binary)])
+    assert rc == 1
+    assert "does not reproduce" in capsys.readouterr().out
 
 
 def test_cmd_crash_info_with_explicit_file(tmp_path, monkeypatch, capsys):
