@@ -11,7 +11,7 @@ import shutil
 from . import config
 
 REQUIRED_TOOLS = ("readelf", "objdump", "nm", "ldd", "file", "strings")
-OPTIONAL_TOOLS = ("gdb", "checksec", "afl-fuzz", "afl-cmin")
+OPTIONAL_TOOLS = ("gdb", "checksec", "afl-fuzz", "afl-cmin", "afl-tmin")
 
 
 def check_environment(host=None):

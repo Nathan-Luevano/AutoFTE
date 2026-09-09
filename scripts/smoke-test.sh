@@ -184,6 +184,17 @@ else
     echo "$CRASH_INFO_OUT"
 fi
 
+step "autofte minimize (built-in reducer)"
+MIN_OUT="$WORKDIR/minimized-crash"
+if MIN_MSG=$(autofte minimize "$CRASHES_DIR/crash-stack-000-len65" \
+    --target-binary "$TARGET_ASAN" --output "$MIN_OUT" --no-afl-tmin 2>&1); then
+    require_file "$MIN_OUT" "minimized crash input" && \
+        require_substring "$MIN_MSG" "smaller" "minimize summary" && ok
+else
+    fail "autofte minimize exited non-zero"
+    echo "$MIN_MSG"
+fi
+
 # 5. Regression-gate bench run -- confirms the checked-in micro corpus and
 # baseline still score as expected end-to-end through the real CLI.
 step "autofte bench --corpus micro --baseline benchmarks/baseline.json"

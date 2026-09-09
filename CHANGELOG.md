@@ -4,6 +4,23 @@ All notable changes to AutoFTE are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-09
+
+### Added
+- **Crash input minimization** (`autofte/minimize.py`): shrink a crash file to
+  the smallest bytes that still reproduce the *same* crash (same sanitizer bug
+  class + faulting function, or same signal + top frame). Uses `afl-tmin` when
+  it is installed and its result still reproduces; otherwise falls back to a
+  built-in delta-debugging (ddmin) reducer with no external dependency.
+- `autofte minimize <crash_file>` subcommand (`--target-binary`, `--output`,
+  `--no-afl-tmin`, `--json`).
+- `autofte triage --minimize` / `autofte pipeline --minimize` minimize a
+  representative crash of every group into `--minimize-dir` (default
+  `minimized/`) and record the result (`tool`, sizes, `reduction_percent`,
+  path) on the group; surfaced in the markdown report, HTML dashboard, and
+  `summary` JSON.
+- `autofte doctor` now also checks for `afl-tmin`.
+
 ## [0.5.0] - 2026-09-09
 
 ### Added
