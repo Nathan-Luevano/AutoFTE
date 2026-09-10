@@ -4,6 +4,23 @@ All notable changes to AutoFTE are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-10
+
+### Added
+- **CASR-compatible export** (`autofte/casr.py`): `autofte casr` and `autofte
+  pipeline --casr-dir DIR` write one CASR-style `.casrep` JSON report per crash
+  group. Each report carries the normalized stacktrace, crash line, registers
+  and faulting instruction (from the GDB crash-state capture), the raw
+  sanitizer report (`AsanReport` / `UbsanReport`), objdump disassembly and
+  source context when a target binary and source file are given, the minimized
+  input path, and a `CrashSeverity` block whose `Type`
+  (`EXPLOITABLE` / `PROBABLY_EXPLOITABLE` / `NOT_EXPLOITABLE` / `UNDEFINED`)
+  and `ShortDescription` are mapped from AutoFTE's crash-state primitive, bug
+  class, or terminating signal, with the fused difficulty and confidence spelled
+  out in `Explanation` (and flagged as an interop mapping, not a verdict).
+- `autofte casr` subcommand (`--output-dir`, `--target-binary`, `--source-file`,
+  `--triage-json`, `--binary-analysis`).
+
 ## [0.8.0] - 2026-09-10
 
 ### Added

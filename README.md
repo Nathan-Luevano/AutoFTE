@@ -10,7 +10,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-625%20passing-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/tests-634%20passing-brightgreen.svg)](tests/)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C / C++](https://img.shields.io/badge/C%20%2F%20C%2B%2B-00599C?logo=c%2B%2B&logoColor=white)](https://en.wikipedia.org/wiki/C%2B%2B)
@@ -59,6 +59,7 @@ AutoFTE runs completely offline. No crash data, binaries, or source code ever le
 | **Plain-Language Exploitability Brief** | Composes `exploitability_brief.md`: for each of the top findings, one prose section covering what the bug is, what the crashed process showed (crash-state primitive), what mitigations stand in the way, how to reproduce it (with the minimized PoC), and AutoFTE's fused read -- explicitly a prioritisation aid, never a verdict. This is "1,166 crashes down to 3 real bugs, explained in English." |
 | **Grounded Local LLM Summaries** | Invokes local Ollama models via strict JSON schema constraints and a 6-stage deterministic validator pipeline to summarize root causes, suggest verification checks, and draft fixes without ungrounded claims. Grounds the prompt in the normalized crash record, mitigation posture, and objdump disassembly of the faulting function. Skips cleanly if Ollama is unavailable. |
 | **Static Dashboard & SARIF Export** | Builds a zero-dependency static HTML dashboard (`dashboard/index.html`) with interactive details, collapsible stack traces, and mitigation summaries. Emits OASIS SARIF v2.1.0 findings for CI/CD code scanning. |
+| **CASR-Compatible Export** | `autofte casr` (and `pipeline --casr-dir`) writes one CASR-style `.casrep` JSON report per crash group -- stacktrace, crash line, registers, faulting instruction, sanitizer report, disassembly, and a `CrashSeverity` block (`EXPLOITABLE` / `PROBABLY_EXPLOITABLE` / `NOT_EXPLOITABLE`) mapped from AutoFTE's fused evidence -- so downstream CASR tooling can ingest an AutoFTE run. |
 | **Empirically Benchmarked Accuracy** | Evaluated against the standard GPTrace/Igor benchmark (325,044 ground-truth ASan crash reports across 14 C/C++ targets) with published macro and pooled micro purity metrics. |
 | **Environment Diagnostic Utility** | Built-in `autofte doctor` audits your system for required binutils tools and optional debuggers, fuzzers, and LLM backends. |
 
@@ -125,7 +126,7 @@ pip install autofte
 Pre-compiled single-file x86_64 Linux executables are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases):
 
 ```bash
-curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.8.0/autofte-linux-x86_64
+curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.9.0/autofte-linux-x86_64
 chmod +x autofte
 sudo mv autofte /usr/local/bin/
 ```
@@ -194,6 +195,7 @@ The pipeline generates the following files in the target output directory:
 - `dashboard/index.html`: Self-contained static HTML dashboard with collapsible crash groups and mitigation statistics.
 - `findings.sarif`: OASIS SARIF v2.1.0 log for CI/CD and GitHub Code Scanning (when `--sarif` is provided).
 - `summary.json`: Consolidated machine-readable summary with severity-ranked crash groups, binary posture, and LLM notes (when `--summary-json` is provided).
+- `casr/*.casrep`: One CASR-compatible JSON report per crash group for interop with CASR tooling (when `--casr-dir` is provided).
 
 ---
 
@@ -217,6 +219,7 @@ autofte [COMMAND] [OPTIONS]
 | `report` | `autofte report [options]` | Compiles Markdown (`analysis_summary.md`), SARIF, or a consolidated JSON summary (`--format json`) from JSON artifacts. |
 | `summary` | `autofte summary [options]` | Prints a severity-ranked crash-group table, or writes JSON/CSV with `--format`, from analysis artifacts. |
 | `brief` | `autofte brief [options]` | Writes `exploitability_brief.md` -- a plain-language write-up of the top `--top` findings tying together bug class, crash-state primitive, mitigations, minimized PoC, and the LLM narrative. |
+| `casr` | `autofte casr [options]` | Writes one CASR-compatible `.casrep` JSON report per crash group to `--output-dir` (default `casr/`) for interop with CASR tooling. |
 | `dashboard` | `autofte dashboard [options]` | Renders the static HTML dashboard from JSON artifacts. |
 | `crash-info` | `autofte crash-info [file]` | Inspects file size, type, and hex preview of a single crash payload. |
 | `minimize` | `autofte minimize <crash_file> [options]` | Shrinks a crash input to the smallest bytes that still reproduce the same crash. |
@@ -249,6 +252,7 @@ autofte [COMMAND] [OPTIONS]
 - `--skip-llm`: Skip the LLM write-up phase entirely.
 - `--sarif PATH`: Write OASIS SARIF v2.1.0 log to specified path.
 - `--summary-json PATH`: Write a consolidated JSON summary (severity-ranked crash groups, binary posture, LLM notes) to specified path.
+- `--casr-dir DIR`: Also write CASR-compatible `.casrep` reports (one per crash group) to `DIR`.
 - `--fail-on-difficulty {easy,medium,hard}`: Exit non-zero (code 2) if any crash group is at or above this exploit difficulty — a CI gate for fuzzing pipelines.
 - `--quiet`: Suppress per-file progress output.
 
@@ -381,7 +385,7 @@ jobs:
 
       - name: Triage Crashes with AutoFTE
         id: autofte
-        uses: Nathan-Luevano/AutoFTE@v0.8.0
+        uses: Nathan-Luevano/AutoFTE@v0.9.0
         with:
           target-binary: "./examples/vuln-demo/target_asan"
           source-file: "examples/vuln-demo/vuln.c"

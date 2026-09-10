@@ -19,6 +19,7 @@ from . import (
     __version__,
     bench,
     brief,
+    casr,
     config,
     crash_display,
     dashboard,
@@ -330,6 +331,21 @@ def cmd_brief(args):
     return 0
 
 
+def cmd_casr(args):
+    triage_data = load_json(args.triage_json)
+    binary_data = load_json(args.binary_analysis) if Path(args.binary_analysis).exists() else {}
+    written = casr.write_reports(
+        triage_data,
+        binary_data,
+        args.output_dir,
+        target_binary=args.target_binary,
+        source_file=args.source_file,
+    )
+    if not getattr(args, "quiet", False):
+        print(f"Wrote {len(written)} CASR report(s) to {args.output_dir}")
+    return 0
+
+
 def cmd_minimize(args):
     crash_file = Path(args.crash_file)
     if not crash_file.is_file():
@@ -574,6 +590,17 @@ def cmd_pipeline(args):
         )
         cmd_brief(brief_ns)
 
+    if getattr(args, "casr_dir", None):
+        casr_ns = argparse.Namespace(
+            target_binary=args.target_binary,
+            source_file=args.source_file,
+            triage_json=args.triage_json,
+            binary_analysis=args.binary_analysis,
+            output_dir=args.casr_dir,
+            quiet=args.quiet,
+        )
+        cmd_casr(casr_ns)
+
     if args.sarif:
         sarif_ns = argparse.Namespace(
             target_binary=args.target_binary,
@@ -636,6 +663,8 @@ def cmd_pipeline(args):
     print(f"  Dashboard: {args.dashboard_dir}/index.html")
     if args.sarif:
         print(f"  SARIF: {args.sarif}")
+    if getattr(args, "casr_dir", None):
+        print(f"  CASR reports: {args.casr_dir}/")
     if getattr(args, "summary_json", None):
         print(f"  JSON summary: {args.summary_json}")
     return 0
@@ -1013,6 +1042,17 @@ def build_parser():
     )
     p_brief.set_defaults(func=cmd_brief)
 
+    p_casr = subparsers.add_parser(
+        "casr",
+        help="Export CASR-compatible .casrep JSON reports (one per crash group)",
+    )
+    p_casr.add_argument("--target-binary", default="./target")
+    p_casr.add_argument("--source-file", default="vuln.c")
+    p_casr.add_argument("--triage-json", default="crash_triage.json")
+    p_casr.add_argument("--binary-analysis", default="binary_analysis.json")
+    p_casr.add_argument("--output-dir", default="casr")
+    p_casr.set_defaults(func=cmd_casr)
+
     p_crash_info = subparsers.add_parser(
         "crash-info", help="Print quick details about one crash file"
     )
@@ -1125,6 +1165,10 @@ def build_parser():
     p_pipeline.add_argument(
         "--summary-json",
         help="Also write a consolidated JSON summary to this path (off by default)",
+    )
+    p_pipeline.add_argument(
+        "--casr-dir",
+        help="Also write CASR-compatible .casrep reports to this directory (off by default)",
     )
     p_pipeline.add_argument(
         "--fail-on-difficulty",

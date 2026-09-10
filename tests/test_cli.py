@@ -14,6 +14,7 @@ SUBCOMMANDS_MIN_ARGS = {
     "report": [],
     "summary": [],
     "brief": [],
+    "casr": [],
     "minimize": ["some-crash-file"],
     "dashboard": [],
     "crash-info": [],

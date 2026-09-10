@@ -207,6 +207,21 @@ else
     cat "$WORKDIR/brief.log"
 fi
 
+step "autofte casr"
+CASR_DIR="$WORKDIR/casr"
+if autofte casr --triage-json "$TRIAGE_JSON" --binary-analysis "$BINSCAN_JSON" \
+    --target-binary "$TARGET_ASAN" --source-file "$VULN_DEMO/vuln.c" \
+    --output-dir "$CASR_DIR" >"$WORKDIR/casr.log" 2>&1; then
+    CASREP="$(find "$CASR_DIR" -name '*.casrep' | head -n 1)"
+    if require_file "$CASREP" "a .casrep report"; then
+        require_substring "$(cat "$CASREP")" "CrashSeverity" "casrep severity block" && \
+            require_substring "$(cat "$CASREP")" "Stacktrace" "casrep stacktrace" && ok
+    fi
+else
+    fail "autofte casr exited non-zero"
+    cat "$WORKDIR/casr.log"
+fi
+
 step "autofte minimize (built-in reducer)"
 MIN_OUT="$WORKDIR/minimized-crash"
 if MIN_MSG=$(autofte minimize "$CRASHES_DIR/crash-stack-000-len65" \
