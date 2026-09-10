@@ -184,6 +184,18 @@ else
     echo "$CRASH_INFO_OUT"
 fi
 
+step "autofte brief"
+BRIEF_OUT="$WORKDIR/exploitability_brief.md"
+if autofte brief --triage-json "$TRIAGE_JSON" --binary-analysis "$BINSCAN_JSON" \
+    --llm-analysis "$EMPTY_LLM_JSON" --target-binary "$TARGET_ASAN" \
+    --output "$BRIEF_OUT" >"$WORKDIR/brief.log" 2>&1; then
+    require_file "$BRIEF_OUT" "exploitability brief" && \
+        require_substring "$(cat "$BRIEF_OUT")" "Exploitability brief" "brief heading" && ok
+else
+    fail "autofte brief exited non-zero"
+    cat "$WORKDIR/brief.log"
+fi
+
 step "autofte minimize (built-in reducer)"
 MIN_OUT="$WORKDIR/minimized-crash"
 if MIN_MSG=$(autofte minimize "$CRASHES_DIR/crash-stack-000-len65" \

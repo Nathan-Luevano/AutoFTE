@@ -4,6 +4,20 @@ All notable changes to AutoFTE are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-10
+
+### Added
+- **Exploitability brief** (`autofte/brief.py`): `exploitability_brief.md` -- a
+  plain-language write-up of the top findings. Each section covers what the bug
+  is, what the crashed process showed (crash-state primitive, in prose), what
+  mitigations stand in the way, how to reproduce it (sample input, minimized
+  PoC, re-run command), and AutoFTE's fused read with its confidence and the
+  standing "prioritisation aid, not a verdict" caveat. The local-model narrative
+  (tidied of evidence-ID citations) is attached to the top finding.
+- `autofte brief` subcommand (`--top`, `--output`, `--target-binary`, ...).
+- `autofte pipeline` / `autofte demo` write `exploitability_brief.md` by default;
+  `--no-brief`, `--brief-output`, `--brief-top` control it.
+
 ## [0.6.0] - 2026-09-09
 
 ### Added

@@ -10,7 +10,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-610%20passing-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/tests-620%20passing-brightgreen.svg)](tests/)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C / C++](https://img.shields.io/badge/C%20%2F%20C%2B%2B-00599C?logo=c%2B%2B&logoColor=white)](https://en.wikipedia.org/wiki/C%2B%2B)
@@ -35,7 +35,8 @@ Fuzzing campaigns often yield hundreds or thousands of crash artifacts that shar
 2. **Audits binary defenses** (NX, PIE, RELRO, stack canaries, FORTIFY_SOURCE, unsafe libc calls) to profile target exploit mitigations.
 3. **Assesses exploit difficulty** by fusing fault mechanics with active mitigations into an evidence-backed difficulty rating, confidence score, and clear rationale.
 4. **Generates grounded write-ups** using an optional local Ollama LLM with schema-constrained, evidence-ledgered prompts to prevent hallucination.
-5. **Exports multi-format artifacts** including a self-contained static HTML dashboard, SARIF v2.1.0 logs for GitHub Code Scanning, and Markdown run summaries.
+5. **Explains the top findings in English** in `exploitability_brief.md` -- one prose section per finding tying the bug class, crash-state primitive, mitigations, minimized PoC, and LLM narrative into a single honest read.
+6. **Exports multi-format artifacts** including a self-contained static HTML dashboard, SARIF v2.1.0 logs for GitHub Code Scanning, and Markdown run summaries.
 
 AutoFTE runs completely offline. No crash data, binaries, or source code ever leave your environment.
 
@@ -54,6 +55,7 @@ AutoFTE runs completely offline. No crash data, binaries, or source code ever le
 | **Context-Aware Exploit Severity** | Evaluates exploit difficulty (`Easy`, `Medium`, `Hard`, `Unknown`) with explicit confidence scores and justification strings based on the intersection of fault type and binary mitigations. |
 | **Crash Input Minimization** | Shrinks a crash file to the smallest bytes that still reproduce the same crash (same bug class + faulting function, or same signal + top frame). Uses `afl-tmin` when installed, with a built-in delta-debugging reducer as a zero-dependency fallback. Available standalone (`autofte minimize`) or per-group during `triage` / `pipeline` (`--minimize`). |
 | **Crash-State Primitive Analysis** | Re-runs a representative crash of each group under GDB and reads the actual crashed process -- registers, the faulting instruction, and the corrupted return address / frame pointer -- to detect `exploitable`-style exploitation primitives (`instruction-pointer-control`, `return-address-overwrite`, `indirect-branch-through-register`, `memory-write`, `memory-read`). Observed directly, not inferred; fused into the severity score and fed to the LLM as cited evidence. |
+| **Plain-Language Exploitability Brief** | Composes `exploitability_brief.md`: for each of the top findings, one prose section covering what the bug is, what the crashed process showed (crash-state primitive), what mitigations stand in the way, how to reproduce it (with the minimized PoC), and AutoFTE's fused read -- explicitly a prioritisation aid, never a verdict. This is "1,166 crashes down to 3 real bugs, explained in English." |
 | **Grounded Local LLM Summaries** | Invokes local Ollama models via strict JSON schema constraints and a 6-stage deterministic validator pipeline to summarize root causes, suggest verification checks, and draft fixes without ungrounded claims. Grounds the prompt in the normalized crash record, mitigation posture, and objdump disassembly of the faulting function. Skips cleanly if Ollama is unavailable. |
 | **Static Dashboard & SARIF Export** | Builds a zero-dependency static HTML dashboard (`dashboard/index.html`) with interactive details, collapsible stack traces, and mitigation summaries. Emits OASIS SARIF v2.1.0 findings for CI/CD code scanning. |
 | **Empirically Benchmarked Accuracy** | Evaluated against the standard GPTrace/Igor benchmark (325,044 ground-truth ASan crash reports across 14 C/C++ targets) with published macro and pooled micro purity metrics. |
@@ -122,7 +124,7 @@ pip install autofte
 Pre-compiled single-file x86_64 Linux executables are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases):
 
 ```bash
-curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.6.0/autofte-linux-x86_64
+curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.7.0/autofte-linux-x86_64
 chmod +x autofte
 sudo mv autofte /usr/local/bin/
 ```
@@ -187,6 +189,7 @@ The pipeline generates the following files in the target output directory:
 - `binary_analysis.json`: Binary mitigation posture (NX, PIE, RELRO, Canaries, FORTIFY_SOURCE, unsafe functions).
 - `llm_analysis.json`: Evidence-grounded root-cause write-up, verification checks, and remediation suggestions.
 - `analysis_summary.md`: Human-readable Markdown summary report.
+- `exploitability_brief.md`: Plain-language brief for the top findings -- what each bug is, what the crashed process showed, what mitigations stand in the way, how to reproduce it (with the minimized PoC), and AutoFTE's honestly-qualified read.
 - `dashboard/index.html`: Self-contained static HTML dashboard with collapsible crash groups and mitigation statistics.
 - `findings.sarif`: OASIS SARIF v2.1.0 log for CI/CD and GitHub Code Scanning (when `--sarif` is provided).
 - `summary.json`: Consolidated machine-readable summary with severity-ranked crash groups, binary posture, and LLM notes (when `--summary-json` is provided).
@@ -212,6 +215,7 @@ autofte [COMMAND] [OPTIONS]
 | `llm` | `autofte llm [options]` | Generates a local LLM summary grounded in the crash record, mitigation posture, and objdump disassembly of the faulting function. |
 | `report` | `autofte report [options]` | Compiles Markdown (`analysis_summary.md`), SARIF, or a consolidated JSON summary (`--format json`) from JSON artifacts. |
 | `summary` | `autofte summary [options]` | Prints a severity-ranked crash-group table, or writes JSON/CSV with `--format`, from analysis artifacts. |
+| `brief` | `autofte brief [options]` | Writes `exploitability_brief.md` -- a plain-language write-up of the top `--top` findings tying together bug class, crash-state primitive, mitigations, minimized PoC, and the LLM narrative. |
 | `dashboard` | `autofte dashboard [options]` | Renders the static HTML dashboard from JSON artifacts. |
 | `crash-info` | `autofte crash-info [file]` | Inspects file size, type, and hex preview of a single crash payload. |
 | `minimize` | `autofte minimize <crash_file> [options]` | Shrinks a crash input to the smallest bytes that still reproduce the same crash. |
@@ -236,6 +240,7 @@ autofte [COMMAND] [OPTIONS]
 - `--reproduction-runs N`: Times to re-run each crashing input to gauge reproducibility (default: 5; `1` disables verification for speed).
 - `--no-crash-state`: Skip the per-group GDB crash-state capture (registers, faulting instruction, exploit primitives).
 - `--minimize` / `--minimize-dir DIR`: Minimize a representative crash of each group into `DIR` (default `minimized/`).
+- `--no-brief` / `--brief-output PATH` / `--brief-top N`: Control the plain-language `exploitability_brief.md` (written by default for the top 3 findings).
 - `--model MODEL`: Ollama model name.
 - `--host URL`: Ollama host URL.
 - `--llm-timeout SEC`: Ollama request timeout in seconds.
@@ -373,7 +378,7 @@ jobs:
 
       - name: Triage Crashes with AutoFTE
         id: autofte
-        uses: Nathan-Luevano/AutoFTE@v0.6.0
+        uses: Nathan-Luevano/AutoFTE@v0.7.0
         with:
           target-binary: "./examples/vuln-demo/target_asan"
           source-file: "examples/vuln-demo/vuln.c"

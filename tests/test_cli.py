@@ -628,6 +628,8 @@ def test_cmd_pipeline_success_with_skip_llm(tmp_path, monkeypatch, capsys):
     assert (tmp_path / "binary.json").exists()
     assert (tmp_path / "summary.md").exists()
     assert (tmp_path / "dashboard" / "index.html").exists()
+    brief_text = (tmp_path / "exploitability_brief.md").read_text()
+    assert "# Exploitability brief" in brief_text
     llm_result = json.loads((tmp_path / "llm.json").read_text())
     assert llm_result["status"] == "skipped"
     out = capsys.readouterr().out
