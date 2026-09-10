@@ -52,6 +52,13 @@ def _print_progress(index, total, name):
 
 
 def cmd_triage(args):
+    previous = None
+    if getattr(args, "incremental", False) and Path(args.output).exists():
+        try:
+            previous = json.loads(Path(args.output).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print(f"Error: could not read existing {args.output} for --incremental: {exc}")
+            return 1
     try:
         result = triage_crashes(
             args.crashes_dir,
@@ -62,6 +69,7 @@ def cmd_triage(args):
             capture_state=getattr(args, "crash_state", True),
             minimize_crashes=getattr(args, "minimize", False),
             minimize_output_dir=getattr(args, "minimize_dir", "minimized"),
+            previous=previous,
         )
     except FileNotFoundError as exc:
         print(f"Error: {exc}")
@@ -76,6 +84,11 @@ def cmd_triage(args):
     write_json(args.output, result)
     if not quiet:
         print(f"Saved triage results to {args.output}")
+        if result.get("incremental"):
+            print(
+                f"Incremental: {result.get('new_crashes_this_run', 0)} new crashes merged into "
+                f"{result.get('previous_total_crashes', 0)} from prior runs"
+            )
 
         repro = result.get("reproduction_summary", {})
         crashed_on_first_run = repro.get("crashed_on_first_run", 0)
@@ -484,6 +497,7 @@ def cmd_pipeline(args):
         crash_state=getattr(args, "crash_state", True),
         minimize=getattr(args, "minimize", False),
         minimize_dir=getattr(args, "minimize_dir", "minimized"),
+        incremental=getattr(args, "incremental", False),
     )
     if cmd_triage(triage_ns) != 0:
         return 1
@@ -872,7 +886,12 @@ def build_parser():
         default="minimized",
         help="Directory for minimized crash inputs (with --minimize)",
     )
-    p_triage.set_defaults(func=cmd_triage, crash_state=True)
+    p_triage.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Merge into an existing --output: re-triage only crash files not already seen",
+    )
+    p_triage.set_defaults(func=cmd_triage, crash_state=True, incremental=False)
 
     p_minimize = subparsers.add_parser(
         "minimize", help="Shrink a crash input to the smallest bytes that still reproduce it"
@@ -1081,6 +1100,11 @@ def build_parser():
         help="Minimize a representative crash of each group into --minimize-dir",
     )
     p_pipeline.add_argument("--minimize-dir", default="minimized")
+    p_pipeline.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Merge into an existing --triage-json: re-triage only crash files not already seen",
+    )
     p_pipeline.add_argument("--triage-json", default="crash_triage.json")
     p_pipeline.add_argument("--binary-analysis", default="binary_analysis.json")
     p_pipeline.add_argument("--llm-analysis", default="llm_analysis.json")
@@ -1107,7 +1131,9 @@ def build_parser():
         choices=("easy", "medium", "hard"),
         help="Exit non-zero if any crash group is at or above this exploit difficulty",
     )
-    p_pipeline.set_defaults(func=cmd_pipeline, crash_state=True, minimize=False, brief=True)
+    p_pipeline.set_defaults(
+        func=cmd_pipeline, crash_state=True, minimize=False, brief=True, incremental=False
+    )
 
     p_demo = subparsers.add_parser(
         "demo",

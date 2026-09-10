@@ -199,6 +199,101 @@ def test_triage_crashes_ignores_readme(crashes_dir, make_executable, monkeypatch
     assert result["triage_mode"] == "direct"
 
 
+def test_triage_incremental_merges_new_crashes(crashes_dir, make_executable, monkeypatch):
+    binary = make_executable()
+    (crashes_dir / "crash1").write_bytes(b"A" * 10)
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+    monkeypatch.setattr(triage, "run_direct", lambda binary, crash_file: "SIGSEGV")
+
+    first = triage_crashes(str(crashes_dir), str(binary))
+    assert first["total_crashes"] == 1
+    assert set(first["seen"].values()) == {"crash1"}
+
+    (crashes_dir / "crash2").write_bytes(b"B" * 20)
+    second = triage_crashes(str(crashes_dir), str(binary), previous=first)
+
+    assert second["incremental"] is True
+    assert second["previous_total_crashes"] == 1
+    assert second["new_crashes_this_run"] == 1
+    assert second["total_crashes"] == 2
+    group = next(iter(second["groups"].values()))
+    assert group["count"] == 2
+    assert set(second["seen"].values()) == {"crash1", "crash2"}
+
+
+def test_triage_incremental_skips_already_seen_files(crashes_dir, make_executable, monkeypatch):
+    binary = make_executable()
+    (crashes_dir / "crash1").write_bytes(b"A" * 10)
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+
+    calls = []
+
+    def fake_run_direct(binary, crash_file):
+        calls.append(crash_file)
+        return "SIGSEGV"
+
+    monkeypatch.setattr(triage, "run_direct", fake_run_direct)
+
+    first = triage_crashes(str(crashes_dir), str(binary))
+    calls.clear()
+
+    second = triage_crashes(str(crashes_dir), str(binary), previous=first)
+    assert calls == []
+    assert second["total_crashes"] == 1
+    assert second["new_crashes_this_run"] == 0
+
+
+def test_triage_incremental_adds_new_group(crashes_dir, make_executable, monkeypatch):
+    binary = make_executable()
+    (crashes_dir / "crash1").write_bytes(b"A" * 10)
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+
+    def fake_run_direct(binary, crash_file):
+        return "SIGSEGV" if crash_file.endswith("crash1") else "SIGABRT"
+
+    monkeypatch.setattr(triage, "run_direct", fake_run_direct)
+
+    first = triage_crashes(str(crashes_dir), str(binary))
+    (crashes_dir / "crash2").write_bytes(b"B" * 20)
+    second = triage_crashes(str(crashes_dir), str(binary), previous=first)
+
+    assert second["unique_crash_frames"] == 2
+    assert second["total_crashes"] == 2
+
+
+def test_triage_incremental_records_non_crash_in_seen(crashes_dir, make_executable, monkeypatch):
+    binary = make_executable()
+    (crashes_dir / "clean1").write_bytes(b"A" * 10)
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+    monkeypatch.setattr(triage, "run_direct", lambda binary, crash_file: "EXIT_0")
+
+    first = triage_crashes(str(crashes_dir), str(binary))
+    assert first["no_crash_count"] == 1
+    assert set(first["seen"].values()) == {"clean1"}
+
+    second = triage_crashes(str(crashes_dir), str(binary), previous=first)
+    assert second["new_crashes_this_run"] == 0
+    assert second["no_crash_count"] == 1
+
+
+def test_triage_incremental_no_new_files_over_empty_previous(
+    crashes_dir, make_executable, monkeypatch
+):
+    binary = make_executable()
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+    monkeypatch.setattr(triage, "run_direct", lambda binary, crash_file: "SIGSEGV")
+
+    first = triage_crashes(str(crashes_dir), str(binary))
+    second = triage_crashes(str(crashes_dir), str(binary), previous=first)
+    assert second["incremental"] is True
+    assert second["total_crashes"] == 0
+
+
 def test_triage_crashes_attaches_crash_state_when_enabled(
     crashes_dir, make_executable, monkeypatch
 ):

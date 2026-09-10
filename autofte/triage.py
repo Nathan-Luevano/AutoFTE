@@ -32,6 +32,7 @@ there is nothing to verify and doing it anyway would make triage
 `reproduction_runs` times slower for zero benefit on a large corpus.
 """
 
+import hashlib
 import os
 import platform
 import re
@@ -389,6 +390,8 @@ def _minimize_groups(final_groups, binary, debugger, output_dir):
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     for label, group in final_groups.items():
+        if group.get("minimized"):
+            continue
         target = None
         for crash in group.get("crashes", []):
             if crash.get("path"):
@@ -404,8 +407,72 @@ def _minimize_groups(final_groups, binary, debugger, output_dir):
             group["minimized"] = result
 
 
+def _file_digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _merge_results(previous, fresh):
+    groups = {label: dict(data) for label, data in (previous.get("groups") or {}).items()}
+    for data in groups.values():
+        data["crashes"] = list(data.get("crashes", []))
+    by_id = {data.get("group_id"): (label, data) for label, data in groups.items()}
+    used = set(groups)
+
+    for fresh_label, fresh_data in (fresh.get("groups") or {}).items():
+        gid = fresh_data.get("group_id")
+        if gid in by_id:
+            _label, existing = by_id[gid]
+            existing["crashes"].extend(fresh_data.get("crashes", []))
+            existing["crashes"].sort(key=lambda item: item.get("size", 0))
+            existing["count"] = len(existing["crashes"])
+        else:
+            label = fresh_label
+            suffix = 2
+            while label in used:
+                label = f"{fresh_label} [{suffix}]"
+                suffix += 1
+            used.add(label)
+            groups[label] = dict(fresh_data)
+            by_id[gid] = (label, groups[label])
+
+    reproduction = _empty_reproduction_summary()
+    for source in (previous.get("reproduction_summary"), fresh.get("reproduction_summary")):
+        for key, value in (source or {}).items():
+            reproduction[key] = reproduction.get(key, 0) + value
+
+    modes = {previous.get("triage_mode"), fresh.get("triage_mode")}
+    if "sanitizer" in modes:
+        triage_mode = "sanitizer"
+    elif "gdb" in modes:
+        triage_mode = "gdb"
+    else:
+        triage_mode = fresh.get("triage_mode") or previous.get("triage_mode") or "direct"
+
+    merged = dict(previous)
+    merged.update(
+        {
+            "groups": groups,
+            "unique_crash_frames": len(groups),
+            "total_crashes": sum(data["count"] for data in groups.values()),
+            "triage_mode": triage_mode,
+            "no_crash_count": previous.get("no_crash_count", 0)
+            + fresh.get("no_crash_count", 0),
+            "timeout_count": previous.get("timeout_count", 0) + fresh.get("timeout_count", 0),
+            "reproduction_summary": reproduction,
+            "seen": {**(previous.get("seen") or {}), **(fresh.get("seen") or {})},
+            "environment": fresh.get("environment", previous.get("environment")),
+            "incremental": True,
+            "previous_total_crashes": previous.get("total_crashes", 0),
+            "new_crashes_this_run": fresh.get("total_crashes", 0),
+        }
+    )
+    return merged
+
+
 def _attach_crash_state(final_groups, binary, debugger):
     for group in final_groups.values():
+        if group.get("crash_state"):
+            continue
         target = None
         for crash in group.get("crashes", []):
             if crash.get("path"):
@@ -427,6 +494,7 @@ def triage_crashes(
     capture_state=False,
     minimize_crashes=False,
     minimize_output_dir=None,
+    previous=None,
 ):
     crash_dir = Path(crashes_dir)
     binary = Path(target_binary)
@@ -438,11 +506,18 @@ def triage_crashes(
     if not binary.exists() or not os.access(binary, os.X_OK):
         raise FileNotFoundError(f"target binary not executable: {binary}")
 
-    crash_files = sorted(
+    all_crash_files = sorted(
         path
         for path in crash_dir.iterdir()
         if path.is_file() and path.name != "README.txt"
     )
+    digests = {path: _file_digest(path) for path in all_crash_files}
+
+    if previous is not None:
+        already_seen = set((previous.get("seen") or {}).keys())
+        crash_files = [p for p in all_crash_files if digests[p] not in already_seen]
+    else:
+        crash_files = all_crash_files
 
     _prefix, setarch_note = _setarch_prefix()
     environment = {
@@ -455,17 +530,22 @@ def triage_crashes(
         "reproduction_runs": reproduction_runs,
     }
 
+    empty_result = {
+        "total_crashes": 0,
+        "unique_crash_frames": 0,
+        "triage_mode": "empty",
+        "groups": {},
+        "no_crash_count": 0,
+        "timeout_count": 0,
+        "reproduction_summary": _empty_reproduction_summary(),
+        "seen": {},
+        "environment": environment,
+    }
+
     if not crash_files:
-        return {
-            "total_crashes": 0,
-            "unique_crash_frames": 0,
-            "triage_mode": "empty",
-            "groups": {},
-            "no_crash_count": 0,
-            "timeout_count": 0,
-            "reproduction_summary": _empty_reproduction_summary(),
-            "environment": environment,
-        }
+        if previous is not None:
+            return _merge_results(previous, empty_result)
+        return empty_result
 
     use_gdb = gdb_is_available(debugger)
     base_mode = "gdb" if use_gdb else "direct"
@@ -475,12 +555,14 @@ def triage_crashes(
     no_crash_count = 0
     timeout_count = 0
     reproduction_summary = _empty_reproduction_summary()
+    seen = {}
 
     total = len(crash_files)
     for index, crash_path in enumerate(crash_files, start=1):
         if progress_callback:
             progress_callback(index, total, crash_path.name)
 
+        seen[digests[crash_path]] = crash_path.name
         sanitizer_record = try_sanitizer_triage(str(binary), str(crash_path))
         internal_key, label, richness, outcome = _classify_crash(
             binary, crash_path, debugger, use_gdb, sanitizer_record
@@ -547,21 +629,24 @@ def triage_crashes(
             "crashes": sorted(bucket["entries"], key=lambda item: item["size"]),
         }
 
-    if capture_state and crash_state.gdb_available(debugger):
-        _attach_crash_state(final_groups, binary, debugger)
-
-    if minimize_crashes and minimize_output_dir:
-        _minimize_groups(final_groups, binary, debugger, minimize_output_dir)
-
-    total_crashes = sum(len(bucket["entries"]) for bucket in groups.values())
-
-    return {
-        "total_crashes": total_crashes,
+    fresh = {
+        "total_crashes": sum(len(bucket["entries"]) for bucket in groups.values()),
         "unique_crash_frames": len(final_groups),
         "triage_mode": triage_mode,
         "groups": final_groups,
         "no_crash_count": no_crash_count,
         "timeout_count": timeout_count,
         "reproduction_summary": reproduction_summary,
+        "seen": seen,
         "environment": environment,
     }
+
+    result = _merge_results(previous, fresh) if previous is not None else fresh
+
+    if capture_state and crash_state.gdb_available(debugger):
+        _attach_crash_state(result["groups"], binary, debugger)
+
+    if minimize_crashes and minimize_output_dir:
+        _minimize_groups(result["groups"], binary, debugger, minimize_output_dir)
+
+    return result
