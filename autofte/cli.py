@@ -18,6 +18,7 @@ from pathlib import Path
 from . import (
     __version__,
     bench,
+    brief,
     config,
     crash_display,
     dashboard,
@@ -298,6 +299,24 @@ def cmd_summary(args):
     return 0
 
 
+def cmd_brief(args):
+    triage_data = load_json(args.triage_json)
+    binary_data = load_json(args.binary_analysis)
+    llm_data = load_json(args.llm_analysis)
+    text = brief.build_brief(
+        args.target_binary,
+        args.source_file,
+        triage_data,
+        binary_data,
+        llm_data,
+        top_n=args.top,
+    )
+    Path(args.output).write_text(text, encoding="utf-8")
+    if not getattr(args, "quiet", False):
+        print(f"Wrote {args.output}")
+    return 0
+
+
 def cmd_minimize(args):
     crash_file = Path(args.crash_file)
     if not crash_file.is_file():
@@ -528,6 +547,19 @@ def cmd_pipeline(args):
     )
     cmd_dashboard(dashboard_ns)
 
+    if getattr(args, "brief", True):
+        brief_ns = argparse.Namespace(
+            target_binary=args.target_binary,
+            source_file=args.source_file,
+            triage_json=args.triage_json,
+            binary_analysis=args.binary_analysis,
+            llm_analysis=args.llm_analysis,
+            output=getattr(args, "brief_output", "exploitability_brief.md"),
+            top=getattr(args, "brief_top", brief.DEFAULT_TOP_N),
+            quiet=args.quiet,
+        )
+        cmd_brief(brief_ns)
+
     if args.sarif:
         sarif_ns = argparse.Namespace(
             target_binary=args.target_binary,
@@ -585,6 +617,8 @@ def cmd_pipeline(args):
     print(f"  Binary analysis: {args.binary_analysis}")
     print(f"  LLM notes: {args.llm_analysis}")
     print(f"  Summary: {args.summary_md}")
+    if getattr(args, "brief", True):
+        print(f"  Exploitability brief: {getattr(args, 'brief_output', 'exploitability_brief.md')}")
     print(f"  Dashboard: {args.dashboard_dir}/index.html")
     if args.sarif:
         print(f"  SARIF: {args.sarif}")
@@ -734,6 +768,7 @@ def cmd_demo(args):
     llm_analysis = args.llm_analysis or str(output_dir / "llm_analysis.json")
     summary_md = args.summary_md or str(output_dir / "analysis_summary.md")
     dashboard_dir = args.dashboard_dir or str(output_dir / "dashboard")
+    brief_output = str(output_dir / "exploitability_brief.md")
 
     print(
         "AutoFTE demo: building and triaging the bundled vuln-demo target "
@@ -760,6 +795,10 @@ def cmd_demo(args):
         fail_on_difficulty=None,
         reproduction_runs=DEMO_REPRODUCTION_RUNS,
         crash_state=True,
+        minimize=False,
+        brief=True,
+        brief_output=brief_output,
+        brief_top=brief.DEFAULT_TOP_N,
     )
     if cmd_pipeline(pipeline_ns) != 0:
         return 1
@@ -940,6 +979,21 @@ def build_parser():
     )
     p_summary.set_defaults(func=cmd_summary)
 
+    p_brief = subparsers.add_parser(
+        "brief",
+        help="Write a plain-language exploitability brief for the top findings",
+    )
+    p_brief.add_argument("--target-binary", default="./target")
+    p_brief.add_argument("--source-file", default="vuln.c")
+    p_brief.add_argument("--triage-json", default="crash_triage.json")
+    p_brief.add_argument("--binary-analysis", default="binary_analysis.json")
+    p_brief.add_argument("--llm-analysis", default="llm_analysis.json")
+    p_brief.add_argument("--output", default="exploitability_brief.md")
+    p_brief.add_argument(
+        "--top", type=int, default=brief.DEFAULT_TOP_N, help="How many findings to write up"
+    )
+    p_brief.set_defaults(func=cmd_brief)
+
     p_crash_info = subparsers.add_parser(
         "crash-info", help="Print quick details about one crash file"
     )
@@ -1033,6 +1087,14 @@ def build_parser():
     p_pipeline.add_argument("--summary-md", default="analysis_summary.md")
     p_pipeline.add_argument("--dashboard-dir", default="dashboard")
     p_pipeline.add_argument(
+        "--no-brief",
+        dest="brief",
+        action="store_false",
+        help="Skip the plain-language exploitability_brief.md",
+    )
+    p_pipeline.add_argument("--brief-output", default="exploitability_brief.md")
+    p_pipeline.add_argument("--brief-top", type=int, default=brief.DEFAULT_TOP_N)
+    p_pipeline.add_argument(
         "--sarif",
         help="Also write a SARIF 2.1.0 log to this path (off by default)",
     )
@@ -1045,7 +1107,7 @@ def build_parser():
         choices=("easy", "medium", "hard"),
         help="Exit non-zero if any crash group is at or above this exploit difficulty",
     )
-    p_pipeline.set_defaults(func=cmd_pipeline, crash_state=True, minimize=False)
+    p_pipeline.set_defaults(func=cmd_pipeline, crash_state=True, minimize=False, brief=True)
 
     p_demo = subparsers.add_parser(
         "demo",

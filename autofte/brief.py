@@ -1,6 +1,10 @@
+import re
 from datetime import datetime
 
 from . import crash_display, dedup
+
+_EVIDENCE_CITATION_RE = re.compile(r"\s*\[E\d+(?:,\s*E\d+)*\]")
+_MULTI_PERIOD_RE = re.compile(r"\.\s*\.+")
 
 _CONTROL_FLOW_PRIMITIVES = (
     "instruction-pointer-control",
@@ -177,20 +181,37 @@ def _our_read(assessment, crash_state):
     return f"{verdict} {caveat}{tail}"
 
 
+def _tidy(text):
+    text = _EVIDENCE_CITATION_RE.sub("", text or "")
+    text = _MULTI_PERIOD_RE.sub(".", text)
+    return text.strip()
+
+
 def _clean_items(items):
-    return [i.strip() for i in (items or []) if isinstance(i, str) and i.strip(": \t")]
+    out = []
+    for item in items or []:
+        if isinstance(item, str) and item.strip(": \t"):
+            out.append(_tidy(item).rstrip("."))
+    return out
+
+
+def _sentence(text):
+    text = _tidy(text)
+    if text and text[-1] not in ".!?":
+        text += "."
+    return text
 
 
 def _llm_prose(llm_data):
     if not llm_data or llm_data.get("status") == "skipped":
         return None
     parts = []
-    summary = (llm_data.get("summary") or "").strip()
+    summary = _sentence(llm_data.get("summary"))
     if summary:
         parts.append(summary)
-    root_cause = (llm_data.get("root_cause") or "").strip()
-    if root_cause and root_cause != summary:
-        parts.append(f"Root cause: {root_cause}")
+    root_cause = _tidy(llm_data.get("root_cause"))
+    if root_cause and root_cause not in summary:
+        parts.append(_sentence(f"Root cause: {root_cause}"))
     fixes = _clean_items(llm_data.get("fix_ideas"))
     if fixes:
         parts.append("Fix ideas: " + "; ".join(fixes[:2]) + ".")

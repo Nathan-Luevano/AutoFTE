@@ -13,6 +13,7 @@ SUBCOMMANDS_MIN_ARGS = {
     "llm": [],
     "report": [],
     "summary": [],
+    "brief": [],
     "minimize": ["some-crash-file"],
     "dashboard": [],
     "crash-info": [],
@@ -488,6 +489,43 @@ def test_cmd_llm_client_check_failure(tmp_path, monkeypatch, capsys):
     rc = cli.main(["llm", "--triage-json", "triage.json"])
     assert rc == 1
     assert "not reachable" in capsys.readouterr().out
+
+
+def test_cmd_brief_writes_markdown(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _write_json(
+        tmp_path / "triage.json",
+        {
+            "total_crashes": 2,
+            "unique_crash_frames": 1,
+            "groups": {
+                "g": {
+                    "count": 2,
+                    "crashes": [
+                        {"file": "c1", "sanitizer": {"bug_class": "heap-buffer-overflow",
+                                                     "crash_stack": [{"frame": 0, "func": "cp"}]}}
+                    ],
+                }
+            },
+        },
+    )
+    _write_json(tmp_path / "binary.json", {"exploit_mitigation_summary": {}})
+    _write_json(tmp_path / "llm.json", {"status": "skipped"})
+
+    rc = cli.main(
+        [
+            "brief",
+            "--triage-json", "triage.json",
+            "--binary-analysis", "binary.json",
+            "--llm-analysis", "llm.json",
+            "--target-binary", "./t",
+            "--output", "brief.md",
+        ]
+    )
+    assert rc == 0
+    text = (tmp_path / "brief.md").read_text()
+    assert "# Exploitability brief" in text
+    assert "heap-buffer-overflow" in text
 
 
 def test_cmd_minimize_writes_smaller_input(tmp_path, monkeypatch, capsys):
