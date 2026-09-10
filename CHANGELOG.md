@@ -4,6 +4,22 @@ All notable changes to AutoFTE are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-10
+
+### Added
+- **Incremental campaign triage** (`autofte triage --incremental`, `autofte
+  pipeline --incremental`): merge a triage run into an existing
+  `crash_triage.json` instead of starting over. Crash files are tracked by
+  content hash in a `seen` map; a re-run executes only the files not already
+  recorded, then folds the new crashes into their existing groups (by
+  `group_id`), adds groups that are new, and accumulates the reproduction,
+  no-crash, and timeout tallies. Merged output carries `incremental`,
+  `previous_total_crashes`, and `new_crashes_this_run`. Keeps re-triage of an
+  ever-growing fuzzing corpus proportional to the new crashes, not the whole
+  set.
+- Crash-state capture and minimization now skip groups that already carry a
+  result, so an incremental re-run does not redo that work.
+
 ## [0.7.0] - 2026-09-10
 
 ### Added

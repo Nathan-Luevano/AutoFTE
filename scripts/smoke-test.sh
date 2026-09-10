@@ -163,6 +163,17 @@ else
     cat "$WORKDIR/triage.log"
 fi
 
+step "autofte triage --incremental (re-run over same corpus)"
+if autofte triage --crashes-dir "$CRASHES_DIR" --target-binary "$TARGET_ASAN" \
+    --output "$TRIAGE_JSON" --incremental --quiet >"$WORKDIR/triage-inc.log" 2>&1; then
+    require_substring "$(cat "$TRIAGE_JSON")" "\"incremental\": true" "incremental triage marker" && \
+        require_substring "$(cat "$TRIAGE_JSON")" "\"new_crashes_this_run\": 0" \
+            "no new crashes on identical re-run" && ok
+else
+    fail "autofte triage --incremental exited non-zero"
+    cat "$WORKDIR/triage-inc.log"
+fi
+
 step "autofte binscan"
 BINSCAN_JSON="$WORKDIR/binary_analysis.json"
 if autofte binscan "$TARGET_ASAN" -o "$BINSCAN_JSON" >"$WORKDIR/binscan.log" 2>&1; then
