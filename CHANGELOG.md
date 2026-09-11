@@ -4,6 +4,13 @@ All notable changes to AutoFTE are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-09-11
+
+### Fixed
+- An overlong, duplicated-phrase docstring line in `autofte/llm.py` was
+  failing `ruff` (E501), which was breaking the tag-guard job on the release
+  workflow. No behavior change; docstring text only.
+
 ## [0.9.0] - 2026-09-10
 
 ### Added
