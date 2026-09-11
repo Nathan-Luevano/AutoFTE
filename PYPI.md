@@ -4,7 +4,7 @@ AutoFTE is a local-first command-line tool for triaging fuzzer crashes. It group
 
 ## Install
 
-AutoFTE supports Python 3.9 or newer on Linux. The recommended installation method is [pipx](https://pipx.pypa.io/):
+AutoFTE supports Python 3.10 or newer on Linux. The recommended installation method is [pipx](https://pipx.pypa.io/):
 
 ```bash
 pipx install autofte

@@ -4,6 +4,23 @@ All notable changes to AutoFTE are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-09-11
+
+### Fixed
+- 4 Dependabot security advisories (2 high, 2 moderate) against `requests`,
+  `urllib3`, and `pytest` on the Python 3.9 dependency resolution --
+  `requests>=2.33.0` no longer supports 3.9, and 3.9 is EOL, so the fix is
+  dropping it: `requires-python` is now `>=3.10`. `uv.lock` regenerated to a
+  single resolution on patched versions across 3.10/3.11/3.12.
+- CI matrix, ruff `target-version`, and README/PYPI.md version claims
+  updated to match.
+- Bumped `actions/checkout`, `actions/setup-python`, and
+  `softprops/action-gh-release` off their deprecated Node.js 20 runtime in
+  all workflows.
+- Enabled `zip(..., strict=False)` (newly available under the 3.10 ruff
+  target) on the `crash-info` preview reader in `cli.py` to make the
+  intentional short-read explicit.
+
 ## [0.9.1] - 2026-09-11
 
 ### Fixed

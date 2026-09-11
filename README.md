@@ -7,7 +7,7 @@
 **Local-first crash triage, binary mitigation analysis, and LLM-assisted write-ups for fuzzing runs.**
 
 [![PyPI Version](https://img.shields.io/pypi/v/autofte.svg?color=0066CC)](https://pypi.org/project/autofte/)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests Passing](https://img.shields.io/badge/tests-634%20passing-brightgreen.svg)](tests/)
@@ -102,7 +102,7 @@ AutoFTE deduplication accuracy is measured against the published [GPTrace / Igor
 
 ### Prerequisites
 
-AutoFTE requires Linux and Python 3.9+.
+AutoFTE requires Linux and Python 3.10+.
 
 - **Required System Tools:** `readelf`, `objdump`, `nm`, `ldd`, `file`, `strings` (provided by `binutils` and system utilities).
 - **Optional Tools:** `gdb` (for non-sanitizer backtraces), `checksec`, `afl-fuzz` / `afl-cmin` (for fuzzing campaigns), and `ollama` (for local LLM write-ups).
@@ -126,7 +126,7 @@ pip install autofte
 Pre-compiled single-file x86_64 Linux executables are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases):
 
 ```bash
-curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.9.1/autofte-linux-x86_64
+curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.9.2/autofte-linux-x86_64
 chmod +x autofte
 sudo mv autofte /usr/local/bin/
 ```
@@ -385,7 +385,7 @@ jobs:
 
       - name: Triage Crashes with AutoFTE
         id: autofte
-        uses: Nathan-Luevano/AutoFTE@v0.9.1
+        uses: Nathan-Luevano/AutoFTE@v0.9.2
         with:
           target-binary: "./examples/vuln-demo/target_asan"
           source-file: "examples/vuln-demo/vuln.c"

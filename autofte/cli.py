@@ -401,7 +401,7 @@ def cmd_crash_info(args):
     if "text" in file_type.lower():
         print("Preview:")
         with crash_file.open("r", encoding="utf-8", errors="replace") as handle:
-            for _, line in zip(range(12), handle):
+            for _, line in zip(range(12), handle, strict=False):
                 print(line.rstrip("\n"))
     else:
         print("Hex preview:")
