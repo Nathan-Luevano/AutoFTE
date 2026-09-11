@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # In a real pipeline, this step (or an earlier job) would produce
       # the crash corpus — e.g. by running a short AFL++/libFuzzer
