@@ -37,7 +37,7 @@ from .io_utils import load_json, write_json
 from .llm import LLMResponseError, OllamaClient
 from .llm import analyze as llm_analyze
 from .paths import pick_crash_dir
-from .triage import DEFAULT_REPRODUCTION_RUNS, triage_crashes
+from .triage import DEFAULT_REPRODUCTION_RUNS, DEFAULT_WORKERS, triage_crashes
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "examples" / "vuln-demo"
 PACKAGED_DEMO_DIR = Path(__file__).resolve().parent / "demo_assets" / "vuln-demo"
@@ -71,6 +71,7 @@ def cmd_triage(args):
             minimize_crashes=getattr(args, "minimize", False),
             minimize_output_dir=getattr(args, "minimize_dir", "minimized"),
             previous=previous,
+            workers=getattr(args, "workers", None),
         )
     except FileNotFoundError as exc:
         print(f"Error: {exc}")
@@ -514,6 +515,7 @@ def cmd_pipeline(args):
         minimize=getattr(args, "minimize", False),
         minimize_dir=getattr(args, "minimize_dir", "minimized"),
         incremental=getattr(args, "incremental", False),
+        workers=getattr(args, "workers", None),
     )
     if cmd_triage(triage_ns) != 0:
         return 1
@@ -920,6 +922,14 @@ def build_parser():
         action="store_true",
         help="Merge into an existing --output: re-triage only crash files not already seen",
     )
+    p_triage.add_argument(
+        "--workers",
+        type=int,
+        help=(
+            "Crash files to triage concurrently "
+            f"(default: min(8, cpu count) = {DEFAULT_WORKERS} here)"
+        ),
+    )
     p_triage.set_defaults(func=cmd_triage, crash_state=True, incremental=False)
 
     p_minimize = subparsers.add_parser(
@@ -1140,6 +1150,14 @@ def build_parser():
         help="Minimize a representative crash of each group into --minimize-dir",
     )
     p_pipeline.add_argument("--minimize-dir", default="minimized")
+    p_pipeline.add_argument(
+        "--workers",
+        type=int,
+        help=(
+            "Crash files to triage concurrently "
+            f"(default: min(8, cpu count) = {DEFAULT_WORKERS} here)"
+        ),
+    )
     p_pipeline.add_argument(
         "--incremental",
         action="store_true",

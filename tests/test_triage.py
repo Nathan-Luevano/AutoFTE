@@ -407,6 +407,27 @@ def test_triage_crashes_uses_gdb_mode_when_available(crashes_dir, make_executabl
     assert list(result["groups"].keys()) == ["#0 0xdead in vuln"]
 
 
+def test_triage_crashes_workers_do_not_change_results(crashes_dir, make_executable, monkeypatch):
+    binary = make_executable()
+    for i in range(6):
+        (crashes_dir / f"crash{i}").write_bytes(bytes([i]) * (i + 1))
+
+    monkeypatch.setattr(triage, "gdb_is_available", lambda debugger: False)
+
+    def fake_run_direct(binary, crash_file):
+        return "SIGSEGV" if int(pathlib.Path(crash_file).name[-1]) % 2 == 0 else "SIGABRT"
+
+    monkeypatch.setattr(triage, "run_direct", fake_run_direct)
+
+    serial = triage_crashes(str(crashes_dir), str(binary), reproduction_runs=1, workers=1)
+    parallel = triage_crashes(str(crashes_dir), str(binary), reproduction_runs=1, workers=6)
+
+    assert serial["total_crashes"] == parallel["total_crashes"] == 6
+    assert set(serial["groups"]) == set(parallel["groups"])
+    for label in serial["groups"]:
+        assert serial["groups"][label]["count"] == parallel["groups"][label]["count"]
+
+
 def test_triage_crashes_progress_callback_invoked(crashes_dir, make_executable, monkeypatch):
     binary = make_executable()
     (crashes_dir / "crash1").write_bytes(b"A")

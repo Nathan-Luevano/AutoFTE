@@ -10,7 +10,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform Linux](https://img.shields.io/badge/platform-Linux-555555.svg?logo=linux&logoColor=white)](https://pypi.org/project/autofte/)
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-634%20passing-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/tests-635%20passing-brightgreen.svg)](tests/)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C / C++](https://img.shields.io/badge/C%20%2F%20C%2B%2B-00599C?logo=c%2B%2B&logoColor=white)](https://en.wikipedia.org/wiki/C%2B%2B)
@@ -56,6 +56,7 @@ AutoFTE runs completely offline. No crash data, binaries, or source code ever le
 | **Crash Input Minimization** | Shrinks a crash file to the smallest bytes that still reproduce the same crash (same bug class + faulting function, or same signal + top frame). Uses `afl-tmin` when installed, with a built-in delta-debugging reducer as a zero-dependency fallback. Available standalone (`autofte minimize`) or per-group during `triage` / `pipeline` (`--minimize`). |
 | **Crash-State Primitive Analysis** | Re-runs a representative crash of each group under GDB and reads the actual crashed process -- registers, the faulting instruction, and the corrupted return address / frame pointer -- to detect `exploitable`-style exploitation primitives (`instruction-pointer-control`, `return-address-overwrite`, `indirect-branch-through-register`, `memory-write`, `memory-read`). Observed directly, not inferred; fused into the severity score and fed to the LLM as cited evidence. |
 | **Incremental Campaign Triage** | `autofte triage --incremental` (and `pipeline --incremental`) re-runs only crash files not already recorded in the prior `crash_triage.json`, merging new crashes into their existing groups, adding new groups as they appear, and accumulating reproducibility and non-crash tallies. Files are tracked by content hash, so re-runs of an ever-growing fuzzing corpus stay cheap. |
+| **Concurrent Triage** | Crash files are classified and reproduction-verified in parallel (`--workers N`, default `min(8, cpu count)`), independent of debugger/sanitizer choice. Aggregation stays deterministic -- same groups, same ordering -- regardless of worker count. |
 | **Plain-Language Exploitability Brief** | Composes `exploitability_brief.md`: for each of the top findings, one prose section covering what the bug is, what the crashed process showed (crash-state primitive), what mitigations stand in the way, how to reproduce it (with the minimized PoC), and AutoFTE's fused read -- explicitly a prioritisation aid, never a verdict. This is "1,166 crashes down to 3 real bugs, explained in English." |
 | **Grounded Local LLM Summaries** | Invokes local Ollama models via strict JSON schema constraints and a 6-stage deterministic validator pipeline to summarize root causes, suggest verification checks, and draft fixes without ungrounded claims. Grounds the prompt in the normalized crash record, mitigation posture, and objdump disassembly of the faulting function. Skips cleanly if Ollama is unavailable. |
 | **Static Dashboard & SARIF Export** | Builds a zero-dependency static HTML dashboard (`dashboard/index.html`) with interactive details, collapsible stack traces, and mitigation summaries. Emits OASIS SARIF v2.1.0 findings for CI/CD code scanning. |
@@ -126,7 +127,7 @@ pip install autofte
 Pre-compiled single-file x86_64 Linux executables are attached to each [GitHub Release](https://github.com/Nathan-Luevano/AutoFTE/releases):
 
 ```bash
-curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.9.2/autofte-linux-x86_64
+curl -sSL -o autofte https://github.com/Nathan-Luevano/AutoFTE/releases/download/v0.10.0/autofte-linux-x86_64
 chmod +x autofte
 sudo mv autofte /usr/local/bin/
 ```
@@ -243,6 +244,7 @@ autofte [COMMAND] [OPTIONS]
 - `--debugger {gdb}`: Debugger backend (default: `gdb`).
 - `--reproduction-runs N`: Times to re-run each crashing input to gauge reproducibility (default: 5; `1` disables verification for speed).
 - `--no-crash-state`: Skip the per-group GDB crash-state capture (registers, faulting instruction, exploit primitives).
+- `--workers N`: Crash files to triage concurrently (default: `min(8, cpu count)`).
 - `--minimize` / `--minimize-dir DIR`: Minimize a representative crash of each group into `DIR` (default `minimized/`).
 - `--incremental`: Merge into an existing `--triage-json`, re-triaging only crash files not already seen.
 - `--no-brief` / `--brief-output PATH` / `--brief-top N`: Control the plain-language `exploitability_brief.md` (written by default for the top 3 findings).
@@ -262,6 +264,7 @@ autofte [COMMAND] [OPTIONS]
 - `--output PATH`: Path for output JSON (default: `crash_triage.json`).
 - `--debugger {gdb}`: Debugger backend (default: `gdb`).
 - `--reproduction-runs N`: Times to re-run each crashing input to gauge reproducibility (default: 5; `1` disables verification for speed).
+- `--workers N`: Crash files to triage concurrently (default: `min(8, cpu count)`).
 - `--no-crash-state`: Skip the per-group GDB crash-state capture.
 - `--minimize` / `--minimize-dir DIR`: Minimize a representative crash of each group into `DIR` (default `minimized/`).
 - `--incremental`: Merge into an existing `--output`, re-triaging only crash files not already seen.
@@ -385,7 +388,7 @@ jobs:
 
       - name: Triage Crashes with AutoFTE
         id: autofte
-        uses: Nathan-Luevano/AutoFTE@v0.9.2
+        uses: Nathan-Luevano/AutoFTE@v0.10.0
         with:
           target-binary: "./examples/vuln-demo/target_asan"
           source-file: "examples/vuln-demo/vuln.c"

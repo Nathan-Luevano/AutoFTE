@@ -32,6 +32,7 @@ there is nothing to verify and doing it anyway would make triage
 `reproduction_runs` times slower for zero benefit on a large corpus.
 """
 
+import concurrent.futures
 import hashlib
 import os
 import platform
@@ -48,6 +49,7 @@ GDB_TIMEOUT_SECONDS = 10
 DIRECT_RUN_TIMEOUT_SECONDS = 10
 DEFAULT_REPRODUCTION_RUNS = 5
 REPRODUCIBILITY_FACTOR = 0.5
+DEFAULT_WORKERS = min(8, os.cpu_count() or 4)
 
 FRAME_PATTERN = re.compile(
     r"#(\d+)\s+0x([0-9a-f]+) in ([^\s]+)(?:.*?at ([^:]+):(\d+))?"
@@ -370,6 +372,49 @@ def _verify_reproducibility(binary, crash_path, debugger, use_gdb, first_key, re
     return "flaky", reproduction_rate
 
 
+def _process_crash_file(binary, crash_path, debugger, use_gdb, reproduction_runs):
+    """Classify one crash file and, if it crashed, verify reproducibility.
+
+    Runs entirely off shared, per-call state (its own subprocesses, its own
+    temp dir via `_run_subprocess`) so it's safe to call from a thread pool
+    -- the caller does all the shared-dict aggregation itself.
+    """
+    sanitizer_record = try_sanitizer_triage(str(binary), str(crash_path))
+    internal_key, label, richness, outcome = _classify_crash(
+        binary, crash_path, debugger, use_gdb, sanitizer_record
+    )
+
+    if outcome in ("NO_CRASH", "TIMEOUT"):
+        return {"outcome": outcome}
+
+    classification, reproduction_rate = _verify_reproducibility(
+        binary, crash_path, debugger, use_gdb, internal_key, reproduction_runs
+    )
+    flaky_flag = classification == "reproducible" and reproduction_rate < 1.0
+
+    entry = {
+        "file": crash_path.name,
+        "path": str(crash_path),
+        "size": crash_path.stat().st_size,
+        "reproducibility": classification,
+        "reproduction_rate": reproduction_rate,
+        "flaky": flaky_flag,
+        "unstable_bucket": classification == "unstable-bucket",
+    }
+    if sanitizer_record is not None:
+        entry["sanitizer"] = sanitizer_record
+
+    return {
+        "outcome": "CRASHED",
+        "sanitizer_hit": sanitizer_record is not None,
+        "internal_key": internal_key,
+        "label": label,
+        "richness": richness,
+        "classification": classification,
+        "entry": entry,
+    }
+
+
 def _empty_reproduction_summary():
     return {
         "crashed_on_first_run": 0,
@@ -495,6 +540,7 @@ def triage_crashes(
     minimize_crashes=False,
     minimize_output_dir=None,
     previous=None,
+    workers=None,
 ):
     crash_dir = Path(crashes_dir)
     binary = Path(target_binary)
@@ -558,53 +604,50 @@ def triage_crashes(
     seen = {}
 
     total = len(crash_files)
-    for index, crash_path in enumerate(crash_files, start=1):
-        if progress_callback:
-            progress_callback(index, total, crash_path.name)
-
-        seen[digests[crash_path]] = crash_path.name
-        sanitizer_record = try_sanitizer_triage(str(binary), str(crash_path))
-        internal_key, label, richness, outcome = _classify_crash(
-            binary, crash_path, debugger, use_gdb, sanitizer_record
+    worker_count = max(int(workers), 1) if workers else DEFAULT_WORKERS
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+        results = executor.map(
+            lambda crash_path: _process_crash_file(
+                binary, crash_path, debugger, use_gdb, reproduction_runs
+            ),
+            crash_files,
         )
 
-        if outcome == "NO_CRASH":
-            no_crash_count += 1
-            continue
-        if outcome == "TIMEOUT":
-            timeout_count += 1
-            continue
+        pairs = zip(crash_files, results, strict=True)
+        for index, (crash_path, result) in enumerate(pairs, start=1):
+            if progress_callback:
+                progress_callback(index, total, crash_path.name)
 
-        if sanitizer_record is not None:
-            sanitizer_hits += 1
+            seen[digests[crash_path]] = crash_path.name
+            outcome = result["outcome"]
 
-        reproduction_summary["crashed_on_first_run"] += 1
-        classification, reproduction_rate = _verify_reproducibility(
-            binary, crash_path, debugger, use_gdb, internal_key, reproduction_runs
-        )
-        reproduction_summary[classification.replace("-", "_")] += 1
-        flaky_flag = classification == "reproducible" and reproduction_rate < 1.0
+            if outcome == "NO_CRASH":
+                no_crash_count += 1
+                continue
+            if outcome == "TIMEOUT":
+                timeout_count += 1
+                continue
 
-        entry = {
-            "file": crash_path.name,
-            "path": str(crash_path),
-            "size": crash_path.stat().st_size,
-            "reproducibility": classification,
-            "reproduction_rate": reproduction_rate,
-            "flaky": flaky_flag,
-            "unstable_bucket": classification == "unstable-bucket",
-        }
-        if sanitizer_record is not None:
-            entry["sanitizer"] = sanitizer_record
+            if result["sanitizer_hit"]:
+                sanitizer_hits += 1
 
-        bucket = groups.setdefault(
-            internal_key,
-            {"label": label, "richness": richness, "entries": [], "key": internal_key},
-        )
-        if richness > bucket["richness"]:
-            bucket["label"] = label
-            bucket["richness"] = richness
-        bucket["entries"].append(entry)
+            reproduction_summary["crashed_on_first_run"] += 1
+            reproduction_summary[result["classification"].replace("-", "_")] += 1
+
+            internal_key = result["internal_key"]
+            bucket = groups.setdefault(
+                internal_key,
+                {
+                    "label": result["label"],
+                    "richness": result["richness"],
+                    "entries": [],
+                    "key": internal_key,
+                },
+            )
+            if result["richness"] > bucket["richness"]:
+                bucket["label"] = result["label"]
+                bucket["richness"] = result["richness"]
+            bucket["entries"].append(result["entry"])
 
     ordered_buckets = sorted(
         groups.values(), key=lambda bucket: len(bucket["entries"]), reverse=True

@@ -155,7 +155,7 @@ fi
 step "autofte triage"
 TRIAGE_JSON="$WORKDIR/crash_triage.json"
 if autofte triage --crashes-dir "$CRASHES_DIR" --target-binary "$TARGET_ASAN" \
-    --output "$TRIAGE_JSON" --quiet >"$WORKDIR/triage.log" 2>&1; then
+    --output "$TRIAGE_JSON" --workers 4 --quiet >"$WORKDIR/triage.log" 2>&1; then
     require_file "$TRIAGE_JSON" "triage JSON"
     ok
 else
