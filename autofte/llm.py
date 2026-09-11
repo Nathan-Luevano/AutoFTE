@@ -1,7 +1,7 @@
 """Optional local-LLM write-up of a triage run, via Ollama.
 
-Design brief: the project methodology and the project methodology -- "LLM proposes, deterministic checker disposes." The model is never
-trusted to author its own confidence, never trusted to cite evidence it
+Design brief: "LLM proposes, deterministic checker disposes." The model is
+never trusted to author its own confidence, never trusted to cite evidence it
 didn't actually see, and never trusted to contradict ground truth we already
 parsed (`sanitizers.py`'s `bug_class`).
 
