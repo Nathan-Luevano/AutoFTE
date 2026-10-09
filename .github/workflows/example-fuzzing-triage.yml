@@ -79,7 +79,7 @@ jobs:
           echo "Top group difficulty: ${{ steps.autofte.outputs.top-difficulty }}"
 
       - name: Upload SARIF as a build artifact too
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: autofte-findings
           path: ${{ steps.autofte.outputs.sarif-path }}
